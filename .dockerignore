@@ -1,0 +1,20 @@
+# Send only runtime sources and dependency pins to the builder.
+**
+!Dockerfile
+!.dockerignore
+!requirements.txt
+!docker/
+!docker/fetch_camoufox.py
+!.env.example
+!main.py
+!sentiment_service.py
+!check_access.py
+!index.html
+!favicon.ico
+!app/
+!app/**
+!collectors/
+!collectors/**
+
+**/__pycache__/
+**/*.py[cod]

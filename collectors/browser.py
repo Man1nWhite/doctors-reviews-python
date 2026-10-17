@@ -65,8 +65,12 @@ class CamoufoxClient:
         factory: BrowserFactory | None = None,
         proxy: str | None = None,
         save_screenshots: bool = False,
+        fingerprint_os: str | None = None,
     ):
+        if fingerprint_os not in {None, "linux", "windows", "macos"}:
+            raise BrowserUnavailableError("BROWSER_OS must be linux, windows, macos or empty")
         self.profile_dir = profile_dir
+        self.fingerprint_os = fingerprint_os
         self.headless = headless
         self.save_screenshots = save_screenshots
         self.timeout = timeout
@@ -99,6 +103,7 @@ class CamoufoxClient:
             await asyncio.to_thread(Path(self.profile_dir).mkdir, parents=True, exist_ok=True)
             self._manager = await self._factory(
                 headless=self.headless,
+                os=self.fingerprint_os,
                 persistent_context=True,
                 user_data_dir=self.profile_dir,
                 humanize=True,
@@ -312,6 +317,7 @@ async def collect_with_browser(url: str, platform: Platform, all_reviews: bool =
             headless="virtual" if mode == "virtual" else mode == "true",
             timeout=float(os.getenv("BROWSER_TIMEOUT_SECONDS", "60")),
             save_screenshots=os.getenv("SAVE_SCREENSHOTS", "false").lower() == "true",
+            fingerprint_os=os.getenv("BROWSER_OS", "").strip().lower() or None,
         )
     stats["fallbacks"] += 1
     return await _browser.collect(url, platform, all_reviews)

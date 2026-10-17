@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 import fastapi
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import Request
+from fastapi import Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
@@ -34,6 +34,7 @@ API_AUTH_ENABLED = os.getenv("API_AUTH_ENABLED", "false").lower() in {"1", "true
 API_KEY = os.getenv("API_KEY", "")
 SENTIMENT_MAX_BODY_BYTES = int(os.getenv("SENTIMENT_MAX_BODY_BYTES", "1048576"))
 CACHE_TTL = float(os.getenv("CACHE_TTL_SECONDS", "900"))
+CACHE_STALE_TTL = float(os.getenv("CACHE_STALE_TTL_SECONDS", "86400"))
 BLOCKED_CACHE_TTL = float(os.getenv("BLOCKED_CACHE_TTL_SECONDS", "30"))
 CACHE_MAX_ENTRIES = int(os.getenv("CACHE_MAX_ENTRIES", "256"))
 MAX_RESULT_REVIEWS = int(os.getenv("MAX_RESULT_REVIEWS", "200"))
@@ -43,7 +44,7 @@ MAX_CONCURRENT = int(os.getenv("MAX_CONCURRENT_COLLECTIONS", "10"))
 CORS_ORIGINS = [item.strip() for item in os.getenv("CORS_ORIGINS", "").split(",") if item.strip()]
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", handlers=[logging.StreamHandler(), logging.FileHandler("app.log", encoding="utf-8")])
 logger = logging.getLogger(__name__)
-metrics = {"requests": 0, "cache_hits": 0, "fallbacks": 0, "errors": 0}
+metrics = {"requests": 0, "cache_hits": 0, "stale_cache_hits": 0, "coalesced_requests": 0, "fallbacks": 0, "errors": 0}
 
 
 def _int_env(name: str, default: int) -> int:
@@ -88,19 +89,25 @@ async def warmup_sources() -> None:
 
 @asynccontextmanager
 async def lifespan(app: fastapi.FastAPI):
-    app.state.cache = AsyncTTLCache(CACHE_TTL, CACHE_MAX_ENTRIES)
+    app.state.cache = AsyncTTLCache(CACHE_TTL, CACHE_MAX_ENTRIES, stale_ttl=CACHE_STALE_TTL)
     app.state.blocked_cache = AsyncTTLCache(BLOCKED_CACHE_TTL, CACHE_MAX_ENTRIES)
+    app.state.collections = {}
     app.state.semaphore = asyncio.Semaphore(MAX_CONCURRENT)
     app.state.rate_limiter = FixedWindowRateLimiter(RATE_LIMIT, RATE_WINDOW)
-    await warmup_sources()
     try:
+        await warmup_sources()
         yield
     finally:
+        tasks = list(app.state.collections.values())
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        app.state.collections.clear()
         await close_browser()
 
 
 app = fastapi.FastAPI(lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=False, allow_methods=["GET", "POST"], allow_headers=["Content-Type", "X-API-Key"])
+app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=False, allow_methods=["GET", "POST"], allow_headers=["Content-Type", "X-API-Key"], expose_headers=["X-Reviews-Cache"])
 
 
 @app.middleware("http")
@@ -152,47 +159,87 @@ def cache_key(url: str, platform: Platform, all_reviews: bool = False) -> str:
     return f"{platform.value}:{url}:{'all' if all_reviews else 'page'}"
 
 
-async def fetch(url: str, platform: Platform, all_reviews: bool = False):
+async def _collect_and_cache(key: str, target: str, platform: Platform, all_reviews: bool, *, refresh: bool):
     started = time.perf_counter()
-    target = modify_url_for_platform(url, platform, all_reviews)
-    key = cache_key(target, platform, all_reviews)
-    cached = await app.state.cache.get(key)
-    if cached is not None:
-        metrics["cache_hits"] += 1
-        return cached
-    blocked = await app.state.blocked_cache.get(key)
-    if blocked is not None:
-        metrics["cache_hits"] += 1
-        return JSONResponse(status_code=blocked["status_code"], content=blocked["content"])
     try:
         async with app.state.semaphore:
+            cached = await app.state.cache.get(key)
+            if cached is not None:
+                return cached
             result = await collect_with_browser(target, platform, all_reviews)
         if MAX_RESULT_REVIEWS >= 0:
             result.reviews = result.reviews[:MAX_RESULT_REVIEWS]
         public = result.public()
         await app.state.cache.set(key, public)
-        logger.info("collection elapsed_ms=%.1f", (time.perf_counter() - started) * 1000)
+        await app.state.blocked_cache.delete(key)
+        logger.info("collection platform=%s url=%s refresh=%s elapsed_ms=%.1f", platform.value, target, refresh, (time.perf_counter() - started) * 1000)
         return public
-    except CollectorError as error:
+    except Exception as error:
         metrics["errors"] += 1
-        content = {"error": error.code, "details": str(error)}
-        if isinstance(error, SourceBlockedError):
-            await app.state.blocked_cache.set(key, {"status_code": error.status_code, "content": content}, BLOCKED_CACHE_TTL)
-        return JSONResponse(status_code=error.status_code, content=content)
-    except Exception:
-        metrics["errors"] += 1
-        logger.exception("collection failed")
-        return JSONResponse(status_code=502, content={"error": "collection_error"})
+        if isinstance(error, CollectorError):
+            status_code = error.status_code
+            content = {"error": error.code, "details": str(error)}
+            logger.warning("collection failed platform=%s url=%s code=%s refresh=%s", platform.value, target, error.code, refresh)
+        else:
+            status_code = 502
+            content = {"error": "collection_error"}
+            logger.exception("collection failed platform=%s url=%s refresh=%s", platform.value, target, refresh)
+        # Failed refreshes keep the last good result and back off before retrying.
+        if refresh or isinstance(error, SourceBlockedError):
+            await app.state.blocked_cache.set(key, {"status_code": status_code, "content": content}, BLOCKED_CACHE_TTL)
+        return JSONResponse(status_code=status_code, content=content)
+
+
+def _start_collection(key: str, target: str, platform: Platform, all_reviews: bool, *, refresh: bool = False) -> asyncio.Task:
+    collections = app.state.collections
+    task = collections.get(key)
+    if task is not None and not task.done():
+        metrics["coalesced_requests"] += 1
+        return task
+
+    # No await between checking and registering: all callers share one task per key.
+    task = asyncio.create_task(_collect_and_cache(key, target, platform, all_reviews, refresh=refresh))
+    collections[key] = task
+
+    def discard(completed):
+        if collections.get(key) is completed:
+            collections.pop(key, None)
+
+    task.add_done_callback(discard)
+    return task
+
+
+async def fetch(url: str, platform: Platform, all_reviews: bool = False, *, response: Response | None = None):
+    target = modify_url_for_platform(url, platform, all_reviews)
+    key = cache_key(target, platform, all_reviews)
+    cached = await app.state.cache.lookup(key)
+    if cached is not None:
+        metrics["cache_hits"] += 1
+        if cached.stale:
+            metrics["stale_cache_hits"] += 1
+            if await app.state.blocked_cache.get(key) is None:
+                _start_collection(key, target, platform, all_reviews, refresh=True)
+        if response is not None:
+            response.headers["X-Reviews-Cache"] = "STALE" if cached.stale else "HIT"
+        return cached.value
+    blocked = await app.state.blocked_cache.get(key)
+    if blocked is not None:
+        metrics["cache_hits"] += 1
+        return JSONResponse(status_code=blocked["status_code"], content=blocked["content"])
+    if response is not None:
+        response.headers["X-Reviews-Cache"] = "MISS"
+    # A timed-out/disconnected caller must not cancel work needed by other callers.
+    return await asyncio.shield(_start_collection(key, target, platform, all_reviews))
 
 
 @app.get("/api/v1/getReviews")
-async def get_reviews(url: str | None = None, platform: Platform | None = None, all_reviews: bool = False):
+async def get_reviews(response: Response, url: str | None = None, platform: Platform | None = None, all_reviews: bool = False):
     if not url:
         return JSONResponse(status_code=400, content={"error": "invalid_url", "details": "URL parameter missing"})
     if not platform:
         return JSONResponse(status_code=400, content={"error": "unsupported_platform", "details": "Platform parameter missing"})
     try:
-        return await fetch(url, platform, all_reviews)
+        return await fetch(url, platform, all_reviews, response=response)
     except InvalidURLError as error:
         return JSONResponse(status_code=400, content={"error": error.code, "details": str(error)})
 

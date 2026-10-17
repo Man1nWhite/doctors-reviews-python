@@ -306,6 +306,8 @@ async def test_other_request_errors_are_controlled_without_retries(mock_client):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("blocked", [False, True])
 async def test_owned_client_is_closed_after_success_or_error(monkeypatch, blocked):
+    monkeypatch.delenv("HTTP_PROXY", raising=False)
+    monkeypatch.delenv("HTTPS_PROXY", raising=False)
     created = []
     real_client = httpx.AsyncClient
 

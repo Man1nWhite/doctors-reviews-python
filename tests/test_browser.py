@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from collectors.base import InvalidURLError, Platform, SourceBlockedError, SourceHTTPError
-from collectors.browser import BrowserNavigationError, BrowserUnavailableError, CamoufoxClient
+from collectors.browser import BrowserNavigationError, BrowserUnavailableError, CamoufoxClient, collect_with_browser
 from collectors.http_client import ResponseTooLargeError
 
 
@@ -65,6 +65,7 @@ def make_browser(tmp_path):
         manager = SimpleNamespace(__aenter__=AsyncMock(return_value=context), __aexit__=AsyncMock())
         factory = AsyncMock(return_value=manager)
         validator = options.pop("url_validator", AsyncMock())
+        options.setdefault("proxy", "")
         client = CamoufoxClient(profile_dir=str(tmp_path / "profile"), factory=factory, url_validator=validator, **options)
         return client, context, manager, factory
     return make
@@ -115,6 +116,27 @@ async def test_browser_proxy_credentials_are_split_for_camoufox(make_browser):
 
 
 @pytest.mark.asyncio
+async def test_configured_os_is_used_for_browser_fingerprint(make_browser, monkeypatch):
+    page = FakePage(sber_html())
+    client, _, _, factory = make_browser(page, fingerprint_os="linux")
+    constructor = Mock(return_value=client)
+    monkeypatch.setenv("BROWSER_OS", "linux")
+    monkeypatch.setattr("collectors.browser.CamoufoxClient", constructor)
+    try:
+        result = await collect_with_browser(SBER_URL, Platform.SBERZDOROVIE)
+        assert result.reviews
+        assert constructor.call_args.kwargs["fingerprint_os"] == "linux"
+        assert factory.call_args.kwargs["os"] == "linux"
+    finally:
+        await client.close()
+
+
+def test_invalid_browser_os_is_rejected(make_browser):
+    with pytest.raises(BrowserUnavailableError, match="BROWSER_OS"):
+        make_browser(fingerprint_os="invalid")
+
+
+@pytest.mark.asyncio
 async def test_one_lazy_context_for_both_sources(make_browser):
     sber = FakePage(sber_html())
     pro = FakePage(PRO_HTML)
@@ -128,6 +150,7 @@ async def test_one_lazy_context_for_both_sources(make_browser):
         assert second.reviews[0].source == "prodoctorov"
         factory.assert_awaited_once()
         assert factory.call_args.kwargs["persistent_context"] is True
+        assert factory.call_args.kwargs["os"] is None
         assert factory.call_args.kwargs["block_webgl"] is True
         assert factory.call_args.kwargs["geoip"] is False
         assert context.new_page.await_count == 2
