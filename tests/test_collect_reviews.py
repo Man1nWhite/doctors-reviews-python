@@ -54,8 +54,26 @@ def test_rating_conversion():
     assert collect_reviews.rating_to_5(10) == 0.5
     # Нуль — реальная оценка «Ужасно» на ПроДокторов, а не отсутствие данных.
     assert collect_reviews.rating_to_5(0) == 0.0
+    # Неоценённый отзыв явно помечается unrated=True и не превращается в 0.0.
+    assert collect_reviews.rating_to_5(0, unrated=True) == ""
     assert collect_reviews.rating_to_5(-1) == ""
     assert collect_reviews.rating_to_5("bad") == ""
+
+
+def test_unrated_and_duplicate_reviews_excluded_from_averages(tmp_path):
+    records = json.loads((ROOT / "output" / "reviews.json").read_text(encoding="utf-8"))
+    ogneva = [record for record in records if record["doctor_id"] == "ogneva_natalya"]
+    all_reviews = [review for record in ogneva for review in record["reviews"]]
+    assert len(all_reviews) == 10
+    assert sum(1 for review in all_reviews if review.get("unrated")) == 1
+    assert sum(1 for review in all_reviews if review.get("duplicate_of")) == 1
+    summary = collect_reviews.render_summary(records, [], 15)
+    assert "| Огнева Наталья Анатольевна | Медицинский центр \"MEDSWISS на ул. Гашека д.9\" | prodoctorov, sberzdorovie | 10 | 4.00 | 6 | 2 |" in summary
+    rows = collect_reviews.flatten_records(ogneva)
+    unrated_rows = [row for row in rows if row["review_id"] == "12599222"]
+    assert len(unrated_rows) == 1
+    assert unrated_rows[0]["rating_100"] == ""
+    assert unrated_rows[0]["rating_5"] == ""
 
 
 def test_flatten_and_outputs(tmp_path):
@@ -219,14 +237,24 @@ def test_ratings_cover_all_doctors():
         assert row["adjusted_raw"] == max(row["raw_score"] - row["penalty"], 0)
         assert row["score_10"] == round(row["adjusted_raw"] / 12 * 10, 1)
     assert ratings[0]["score_10"] >= ratings[-1]["score_10"]
-    assert [row["doctor_id"] for row in ratings[:3]] == [
-        "ermakova_evgeniya", "dzhatieva_diana", "tarasova_tatyana"
+    assert [row["doctor_id"] for row in ratings[:5]] == [
+        "ermakova_evgeniya",
+        "dzhatieva_diana",
+        "ogneva_natalya",
+        "sevostyanenko_elizaveta",
+        "tarasova_tatyana",
     ]
     by_id = {row["doctor_id"]: row for row in ratings}
     assert by_id["tarasova_tatyana"]["penalty"] == 1
-    assert by_id["tarasova_tatyana"]["raw_score"] == 11
+    assert by_id["tarasova_tatyana"]["raw_score"] == 10
+    assert by_id["tarasova_tatyana"]["positive_topic_reviews"] == 1
+    assert by_id["tarasova_tatyana"]["negative_topic_reviews"] == 3
     assert by_id["ermakova_evgeniya"]["penalty"] == 0
     assert by_id["dzhatieva_diana"]["negative_topic_reviews"] == 0
+    # Реальная оценка 5.0 ставит Захарян выше Авраменко при равном итоговом балле 5.0/10.
+    assert by_id["zakharyan_elizaveta"]["score_10"] == by_id["avramenko_marina"]["score_10"] == 5.0
+    assert by_id["zakharyan_elizaveta"]["rank"] < by_id["avramenko_marina"]["rank"]
+    assert by_id["avramenko_marina"]["assumed_reviews"] == 8
 
 
 def test_rating_rules_are_explicit():
@@ -271,6 +299,39 @@ def test_rating_rules_are_explicit():
     assert rate_doctors.count_topic_reviews(negative) == (0, 2)
 
 
+def test_review_focus_word_boundaries_and_university_rule():
+    false_positives = [
+        "очень известный эндокринолог",
+        "помогла провести обследование и повесить холтер",
+        "восстановила душевное равновесие, всё проверено временем",
+    ]
+    for sample in false_positives:
+        assert rate_doctors.REVIEW_FOCUS.search(sample) is None
+
+    true_positives = [
+        "обратилась из-за набора веса и метаболизма",
+        "помогла снизить вес без давления, направила по РПП",
+        "объяснила как справиться с колебаниями сахара",
+        "наблюдаюсь с преддиабетом и инсулинорезистентностью",
+    ]
+    for sample in true_positives:
+        assert rate_doctors.REVIEW_FOCUS.search(sample) is not None
+
+    regional_with_signals = {
+        "specialty": "эндокринолог",
+        "education": [
+            {"institution": "Иркутский ГМУ", "year": 2013, "kind": "Базовое образование", "program": "Лечебное дело"},
+            {"institution": "Бурятский ГУ", "year": 2014, "kind": "Интернатура", "program": "Эндокринология"},
+        ],
+        "courses": ["c1", "c2", "c3", "c4"],
+        "documents_verified": True,
+        "honors": False,
+        "degree": None,
+        "associations": [],
+    }
+    assert rate_doctors.score_university(regional_with_signals) == 1
+
+
 def test_ratings_csv_and_summary_section(tmp_path):
     assert rate_doctors.main([
         "--output-dir", str(tmp_path), "--reviews-dir", str(ROOT / "output")
@@ -287,14 +348,15 @@ def test_ratings_csv_and_summary_section(tmp_path):
     assert "Новые участники сравнения" in text
     assert "не повышают D" in text
     detail = (tmp_path / "top3_detail.md").read_text(encoding="utf-8")
-    for name in ("Ермакова", "Джатиева", "Тарасова"):
+    for name in ("Ермакова", "Джатиева", "Огнева"):
         assert name in detail
-    assert "11 кг" in detail
+    assert "Севостьяненко" in detail
     assert "Метаболические нарушения. Ожирение. Преддиабет" in detail
     assert "Что уточнить на приёме" in detail
     extra = (tmp_path / "comparison_extra.md").read_text(encoding="utf-8")
     for name in ("Захарян", "Анохина", "Авраменко"):
         assert name in extra
+    assert "не опубликованы" in extra
     assert "extra_doctor_reviews.json" in extra
     summary = tmp_path / "summary.md"
     assert rate_doctors.main([

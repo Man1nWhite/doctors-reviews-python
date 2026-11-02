@@ -30,6 +30,18 @@ async def test_rate_limiter_returns_retry_after():
     assert retry > 0
 
 
+@pytest.mark.asyncio
+async def test_rate_limiter_prunes_stale_and_excess_buckets():
+    now = [0.0]
+    limiter = FixedWindowRateLimiter(2, 10, max_buckets=3, clock=lambda: now[0])
+    for idx in range(5):
+        assert (await limiter.check(f"ip:{idx}"))[0]
+    assert len(limiter._buckets) <= 3
+    now[0] = 15.0
+    assert (await limiter.check("ip:fresh"))[0]
+    assert set(limiter._buckets.keys()) == {"ip:fresh"}
+
+
 def test_url_rejects_userinfo_and_ports():
     with pytest.raises(InvalidURLError):
         validate_url_shape("https://user:pass@docdoc.ru/doctor/a", Platform.SBERZDOROVIE)

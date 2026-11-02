@@ -22,7 +22,7 @@ def normalize_base_url(url: str | None) -> str | None:
 
 client = AsyncOpenAI(
     base_url=normalize_base_url(AI_API_URL),
-    api_key=AI_API_KEY,
+    api_key=AI_API_KEY or "not-configured",
     max_retries=3,
 )
 
@@ -33,14 +33,12 @@ async def check_batch_reviews_sentiment(reviews_data: List[dict]) -> dict:
     if not reviews_data:
         return {"results": []}
 
-    # Подготовка данных для промпта
-    prompt_items = []
-    for item in reviews_data:
-        # Убираем лишние переносы строк, чтобы не ломать JSON-подобную структуру в тексте
-        text = item.get("text", "").replace("\n", " ").replace('"', "'")
-        prompt_items.append(f'{{"id": "{item.get("id")}", "text": "{text}"}}')
-    
-    reviews_json_str = "[\n" + ",\n".join(prompt_items) + "\n]"
+    # Подготовка данных для промпта через json.dumps, чтобы корректно экранировать кавычки, слэши и управляющие символы
+    prompt_items = [
+        {"id": str(item.get("id", "")), "text": " ".join(str(item.get("text", "")).splitlines())}
+        for item in reviews_data
+    ]
+    reviews_json_str = json.dumps(prompt_items, ensure_ascii=False, indent=2)
 
     system_prompt = "You are a sentiment analysis assistant. You respond ONLY with valid JSON."
     user_prompt = f"""

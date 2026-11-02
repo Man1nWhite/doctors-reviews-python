@@ -19,8 +19,11 @@ import time
 
 from dotenv import load_dotenv
 
-from collectors.base import Platform
+from collectors.base import Platform, SOURCE_CONFIGS
 from collectors.browser import close_browser, collect_with_browser
+from collectors.http_client import HTTPClient
+from collectors.prodoctorov import parse_prodoctorov_page
+from collectors.sberzdorovie import parse_sber_page
 
 load_dotenv()
 logging.basicConfig(
@@ -31,6 +34,17 @@ CHECKS = (
     (Platform.SBERZDOROVIE, os.getenv("TEST_URL", "https://ekb.docdoc.ru/doctor/Mozgalina_Irina")),
     (Platform.PRODOCTOROV, os.getenv("PRODOCTOROV_TEST_URL", "https://prodoctorov.ru/ekaterinburg/vrach/248920-shakirov/")),
 )
+
+
+async def check_http(platform: Platform, url: str) -> str:
+    domains = SOURCE_CONFIGS[platform].domains
+    async with HTTPClient(domains) as http:
+        response = await http.get(url)
+    if platform == Platform.SBERZDOROVIE:
+        result, _, _ = parse_sber_page(response.text)
+    else:
+        result = parse_prodoctorov_page(response.text)
+    return f"OK, отзывов: {len(result.reviews)} — {result.title}"
 
 
 async def check_browser(platform: Platform, url: str) -> str:
@@ -44,12 +58,13 @@ async def main() -> None:
         try:
             for platform, url in CHECKS:
                 print(f"\n=== {platform.value}: {url}")
-                started = time.perf_counter()
-                try:
-                    outcome = await check_browser(platform, url)
-                except Exception as error:
-                    outcome = f"FAIL {getattr(error, 'code', type(error).__name__)}: {error}"
-                print(f"Браузер: {outcome} ({time.perf_counter() - started:.1f} c)")
+                for label, runner in (("HTTP", check_http), ("Браузер", check_browser)):
+                    started = time.perf_counter()
+                    try:
+                        outcome = await runner(platform, url)
+                    except Exception as error:
+                        outcome = f"FAIL {getattr(error, 'code', type(error).__name__)}: {error}"
+                    print(f"{label}: {outcome} ({time.perf_counter() - started:.1f} c)")
         finally:
             await close_browser()
 
