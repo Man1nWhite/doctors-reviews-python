@@ -1,0 +1,337 @@
+{
+  "description": "Список врачей для пакетного сбора отзывов. API репозитория собирает отзывы только по прямому URL страницы врача на sberzdorovie (docdoc.ru / sberhealth.ru) или prodoctorov (prodoctorov.ru); поиска по ФИО в API нет. Поле yandex_profile — дополнительный источник (Яндекс.Медицина), он НЕ входит в urls и не передаётся в /api/v1/getReviews.",
+  "updated_at": "2026-11-02",
+  "doctors": [
+    {
+      "id": "vyatkina_irina",
+      "name": "Ирина Сергеевна Вяткина",
+      "expected_name": "Вяткина Ирина Сергеевна",
+      "clinic": "Клиника Сезоны",
+      "urls": [
+        {
+          "platform": "sberzdorovie",
+          "url": null,
+          "status": "needs_url",
+          "note": "Точная ссылка docdoc.ru/sberhealth.ru не найдена; отзывы собраны с ПроДокторов по ссылке пользователя"
+        },
+        {
+          "platform": "prodoctorov",
+          "url": "https://prodoctorov.ru/moskva/vrach/192945-vyatkina/",
+          "status": "collected",
+          "note": "Ссылка пользователя (#otzivi); ФИО/отчество подтверждены, 10 отзывов собраны с прямой страницы /otzivi/"
+        }
+      ]
+    },
+    {
+      "id": "kazakov_yuriy",
+      "name": "Казаков Юрий Львович",
+      "expected_name": "Казаков Юрий Львович",
+      "clinic": "Медицинский центр \"MEDSWISS в Нагорном\"",
+      "urls": [
+        {
+          "platform": "sberzdorovie",
+          "url": "https://docdoc.ru/doctor/Kazakov_Yuriy",
+          "status": "collected"
+        },
+        {
+          "platform": "prodoctorov",
+          "url": "https://prodoctorov.ru/moskva/vrach/216396-kazakov/",
+          "status": "collected"
+        }
+      ],
+      "yandex_profile": {
+        "url": "https://yandex.ru/medicine/doctor/kazakov_yuriy_9d6zxvkx7YSbZ",
+        "collected_reviews_file": "output/yandex_reviews.json",
+        "note": "3 отзыва, все собраны"
+      }
+    },
+    {
+      "id": "dzhatieva_diana",
+      "name": "Джатиева Диана Николаевна",
+      "expected_name": "Джатиева Диана Николаевна",
+      "clinic": "Медицинский центр \"MEDSWISS Замоскворечье\"",
+      "urls": [
+        {
+          "platform": "sberzdorovie",
+          "url": "https://docdoc.ru/doctor/Dzhatieva_Diana",
+          "status": "collected"
+        },
+        {
+          "platform": "prodoctorov",
+          "url": "https://prodoctorov.ru/moskva/vrach/778618-dzhatieva/",
+          "status": "collected",
+          "note": "8 отзывов собраны напрямую со страницы /otzivi/"
+        }
+      ]
+    },
+    {
+      "id": "seferyan_sergey",
+      "name": "Сеферян Сергей Левонович",
+      "expected_name": "Сеферян Сергей Левонович",
+      "clinic": "Медицинский центр \"MEDSWISS на Ельнинской\"",
+      "urls": [
+        {
+          "platform": "sberzdorovie",
+          "url": null,
+          "status": "needs_url",
+          "note": "Ссылка docdoc.ru/sberhealth.ru не подтверждена; Яндекс даёт ДОКТУ и НаПоправку"
+        },
+        {
+          "platform": "prodoctorov",
+          "url": "https://prodoctorov.ru/moskva/vrach/797596-seferyan/",
+          "status": "collected"
+        }
+      ],
+      "yandex_profile": {
+        "url": "https://yandex.ru/medicine/doctor/seferyan_sergey_MIdF43g5qP0E8",
+        "collected_reviews_file": "output/yandex_reviews.json",
+        "note": "9 отзывов, в выгрузке первые 5"
+      }
+    },
+    {
+      "id": "gordeeva_alla",
+      "name": "Гордеева Алла Владимировна",
+      "expected_name": "Гордеева Алла Владимировна",
+      "clinic": "Медицинский центр \"MEDSWISS на ул. Гашека д.12\"",
+      "urls": [
+        {
+          "platform": "sberzdorovie",
+          "url": null,
+          "status": "needs_url",
+          "note": "docdoc.ru/doctor/Gordeeva_Alla ведёт к Алле Юрьевне, акушеру; точная ссылка не найдена. Профиль на ПроДокторов подтверждён, 5 отзывов собраны с doctu.ru отдельным слоем"
+        },
+        {
+          "platform": "prodoctorov",
+          "url": "https://prodoctorov.ru/moskva/vrach/64578-gordeeva/",
+          "status": "confirmed_empty",
+          "note": "Ссылка пользователя; ФИО и клиника «МедСвисс» на Гашека 12 подтверждены, но на странице 0 отзывов"
+        }
+      ],
+      "doctu_profile": {
+        "url": "https://doctu.ru/msk/doctor/gordeeva-a-v",
+        "status": "collected",
+        "reviews": 5,
+        "clinic_reviews": 3,
+        "note": "Ссылка пользователя; подтверждает того же врача и клинику «MedSwiss на Гашека, 12». Домен не поддерживается API репозитория → output/doctu_reviews.*"
+      }
+    },
+    {
+      "id": "evstigneeva_olga",
+      "name": "Евстигнеева Ольга Анатольевна",
+      "expected_name": "Евстигнеева Ольга Анатольевна",
+      "clinic": "Медицинский центр \"MEDSWISS на Ленивке\"",
+      "urls": [
+        {
+          "platform": "sberzdorovie",
+          "url": null,
+          "status": "needs_url",
+          "note": "Ссылка docdoc.ru/sberhealth.ru не подтверждена"
+        },
+        {
+          "platform": "prodoctorov",
+          "url": "https://prodoctorov.ru/moskva/vrach/126751-evstigneeva/",
+          "status": "collected",
+          "note": "1 отзыв; на странице ПроДокторов отчество «Анатольевна», что подтверждает ФИО из запроса"
+        }
+      ]
+    },
+    {
+      "id": "bystrova_tatyana",
+      "name": "Быстрова Татьяна Викторовна",
+      "expected_name": "Быстрова Татьяна Викторовна",
+      "clinic": "Медицинский центр \"MEDSWISS на Ленивке\"",
+      "urls": [
+        {
+          "platform": "sberzdorovie",
+          "url": null,
+          "status": "needs_url",
+          "note": "docdoc.ru/doctor/Bystrova_Natalya_4 — другой врач; точный URL не найден"
+        },
+        {
+          "platform": "prodoctorov",
+          "url": "https://prodoctorov.ru/moskva/vrach/216397-bystrova/",
+          "status": "collected",
+          "note": "8 отзывов на странице, из них 3 аннулированы; в выгрузку вошли 5"
+        }
+      ]
+    },
+    {
+      "id": "ogneva_natalya",
+      "name": "Огнева Наталья Анатольевна",
+      "expected_name": "Огнева Наталья Анатольевна",
+      "clinic": "Медицинский центр \"MEDSWISS на ул. Гашека д.9\"",
+      "urls": [
+        {
+          "platform": "sberzdorovie",
+          "url": "https://docdoc.ru/doctor/Ogneva_Natalja",
+          "status": "collected"
+        },
+        {
+          "platform": "prodoctorov",
+          "url": "https://prodoctorov.ru/moskva/vrach/216399-ogneva/",
+          "status": "collected"
+        }
+      ],
+      "yandex_profile": {
+        "url": "https://yandex.ru/medicine/doctor/ogneva_natalya_jibq3imocZHEw",
+        "collected_reviews_file": "output/yandex_reviews.json",
+        "note": "15 отзывов, в выгрузке первые 5"
+      }
+    },
+    {
+      "id": "ermakova_evgeniya",
+      "name": "Ермакова Евгения Михайловна",
+      "expected_name": "Ермакова Евгения Михайловна",
+      "clinic": "Медицинский центр \"Доктор 2000\" (входит в сеть MEDSWISS)",
+      "urls": [
+        {
+          "platform": "sberzdorovie",
+          "url": null,
+          "status": "needs_url",
+          "note": "Ссылка docdoc.ru/sberhealth.ru не подтверждена"
+        },
+        {
+          "platform": "prodoctorov",
+          "url": "https://prodoctorov.ru/moskva/vrach/1032864-ermakova/",
+          "status": "collected",
+          "note": "URL найден через блок «Контакты и ссылки» Яндекс.Медицины; 2 отзыва"
+        }
+      ],
+      "yandex_profile": {
+        "url": "https://yandex.ru/medicine/doctor/yermakova_yevgeniya_65x0gEh2P369a",
+        "collected_reviews_file": "output/yandex_reviews.json",
+        "note": "5 отзывов, все собраны; клиника «Доктор 2000» подтверждена"
+      }
+    },
+    {
+      "id": "skorik_elena",
+      "name": "Скорик Елена Сергеевна",
+      "expected_name": "Скорик Елена Сергеевна",
+      "clinic": "Медицинский центр \"MEDSWISS на Медици Бескудниковском бульваре\"",
+      "urls": [
+        {
+          "platform": "sberzdorovie",
+          "url": null,
+          "status": "needs_url",
+          "note": "docdoc.ru/doctor/Skorik_Elena ведёт к Елене Станиславовне (УЗИ); отзывы собраны с ПроДокторов по ссылке пользователя"
+        },
+        {
+          "platform": "prodoctorov",
+          "url": "https://prodoctorov.ru/moskva/vrach/509389-skorik/",
+          "status": "collected",
+          "note": "Ссылка пользователя; ФИО/отчество подтверждены, 6 отзывов собраны с прямой страницы /otzivi/"
+        }
+      ]
+    },
+    {
+      "id": "tarasova_tatyana",
+      "name": "Тарасова Татьяна Сергеевна",
+      "expected_name": "Тарасова Татьяна Сергеевна",
+      "clinic": "Медицинский центр \"MEDSWISS в Выхино\"",
+      "urls": [
+        {
+          "platform": "sberzdorovie",
+          "url": null,
+          "status": "needs_url",
+          "note": "Ссылка docdoc.ru/sberhealth.ru не подтверждена; ранее в поиске встречались однофамильцы"
+        },
+        {
+          "platform": "prodoctorov",
+          "url": "https://prodoctorov.ru/moskva/vrach/386283-tarasova/",
+          "status": "collected",
+          "note": "URL найден через Яндекс.Медицину; в карьере указана сеть MedSwiss с 2018 г., 10 отзывов"
+        }
+      ],
+      "yandex_profile": {
+        "url": "https://yandex.ru/medicine/doctor/tarasova_tatyana_XvSIos6cyNHVw",
+        "collected_reviews_file": "output/yandex_reviews.json",
+        "note": "24 отзыва, в выгрузке первые 5; в отзывах указан MedSwiss на Гашека, 12"
+      }
+    },
+    {
+      "id": "nezhvedilova_salihat",
+      "name": "Нежведилова Салихат Мурадовна",
+      "expected_name": "Нежведилова Салихат Мурадовна",
+      "clinic": "Медицинский центр \"Поликлиника.ру\" / \"Зуб.ру\" на Автозаводской",
+      "urls": [
+        {
+          "platform": "sberzdorovie",
+          "url": null,
+          "status": "needs_url",
+          "note": "Ссылка docdoc.ru/sberhealth.ru не найдена"
+        },
+        {
+          "platform": "prodoctorov",
+          "url": "https://prodoctorov.ru/moskva/vrach/1365142-nezhvedilova/",
+          "status": "confirmed_empty",
+          "note": "Профиль найден в списке врачей «Поликлиника.ру» на Автозаводской; на ПроДокторов 0 отзывов"
+        }
+      ]
+    },
+    {
+      "id": "darkhanova_evgeniya",
+      "name": "Дарханова Евгения Владимировна",
+      "expected_name": "Дарханова Евгения Владимировна",
+      "clinic": "Медицинский центр \"Поликлиника.ру\" / \"Зуб.ру\" на Улице 1905 года; КДЦ на Полянке",
+      "urls": [
+        {
+          "platform": "sberzdorovie",
+          "url": "https://uud.docdoc.ru/doctor/Balzhinimaeva_Erzhena_2?pid=27997",
+          "status": "found",
+          "note": "Поддомен docdoc.ru разрешён SOURCE_CONFIGS; страница не собрана из-за недоступности hosted API"
+        },
+        {
+          "platform": "prodoctorov",
+          "url": "https://prodoctorov.ru/moskva/vrach/1272592-darhanova/",
+          "status": "collected",
+          "note": "Профиль объединяет Дарханову и Бальжинимаеву Эржену Владимировну; 4 отзыва"
+        }
+      ],
+      "yandex_profile": {
+        "url": "https://yandex.ru/medicine/doctor/balzhinimaeva_erzhena_uUP4LV5CHV6EA",
+        "collected_reviews_file": "output/yandex_reviews.json",
+        "note": "1 отзыв, собран; клиника «Поликлиника.ру на Улице 1905 года» подтверждена"
+      }
+    },
+    {
+      "id": "sevostyanenko_elizaveta",
+      "name": "Севостьяненко Елизавета Александровна",
+      "expected_name": "Севостьяненко Елизавета Александровна",
+      "clinic": "Медицинский центр \"Поликлиника.ру\" / \"Зуб.ру\" на Таганке",
+      "urls": [
+        {
+          "platform": "sberzdorovie",
+          "url": null,
+          "status": "needs_url",
+          "note": "Ссылка docdoc.ru/sberhealth.ru не подтверждена"
+        },
+        {
+          "platform": "prodoctorov",
+          "url": "https://prodoctorov.ru/moskva/vrach/1331459-sevostyanenko/",
+          "status": "collected",
+          "note": "URL найден в списке врачей «Поликлиника.ру» на Таганской; 7 отзывов"
+        }
+      ]
+    },
+    {
+      "id": "sidorova_elena",
+      "name": "Сидорова Елена Андреевна",
+      "expected_name": "Сидорова Елена Андреевна",
+      "clinic": "Медицинский центр \"Поликлиника.ру\" / \"Зуб.ру\" на Автозаводской",
+      "urls": [
+        {
+          "platform": "sberzdorovie",
+          "url": null,
+          "status": "needs_url",
+          "note": "Ссылка docdoc.ru/sberhealth.ru не найдена; в поиске много однофамильцев"
+        },
+        {
+          "platform": "prodoctorov",
+          "url": "https://prodoctorov.ru/moskva/vrach/1415891-sidorova/",
+          "status": "confirmed_empty",
+          "note": "Профиль найден в списке врачей «Поликлиника.ру» на Автозаводской; на ПроДокторов 0 отзывов"
+        }
+      ]
+    }
+  ]
+}
