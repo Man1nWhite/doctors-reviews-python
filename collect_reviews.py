@@ -92,7 +92,9 @@ def verify_title(title: str, expected_name: str) -> list[str]:
     return missing
 
 
-def rating_to_5(value: Any) -> float | str:
+def rating_to_5(value: Any, *, unrated: bool = False) -> float | str:
+    if unrated or value is None or isinstance(value, bool):
+        return ""
     try:
         number = float(value)
     except (TypeError, ValueError):
@@ -101,8 +103,13 @@ def rating_to_5(value: Any) -> float | str:
         return ""
     # В ответе API рейтинг нормализован к шкале 0..100 (100 = 5 звёзд).
     # Нуль — валидная оценка «Ужасно» на ПроДокторов, её нельзя выбрасывать
-    # из среднего балла и из подсчёта отрицательных отзывов.
+    # из среднего балла и из подсчёта отрицательных отзывов; отзывы без
+    # числовой оценки помечаются отдельно флагом unrated=True.
     return round(number / 20, 2)
+
+
+def review_rating_5(review: dict[str, Any]) -> float | str:
+    return rating_to_5(review.get("rating", 0), unrated=bool(review.get("unrated")))
 
 
 def build_request_url(api_url: str, url: str, platform: str, all_reviews: bool) -> str:
@@ -223,8 +230,8 @@ def flatten_records(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
                 "author": review.get("name", ""),
                 "date": review.get("date", ""),
                 "date_beauty": review.get("date_beauty", ""),
-                "rating_100": review.get("rating", 0),
-                "rating_5": rating_to_5(review.get("rating", 0)),
+                "rating_100": "" if review.get("unrated") else review.get("rating", 0),
+                "rating_5": review_rating_5(review),
                 "message": review.get("message", ""),
                 "doctor_url": record.get("url", ""),
             })
@@ -287,7 +294,11 @@ def render_summary(records: list[dict[str, Any]], issues: list[dict[str, Any]], 
         "| --- | --- | --- | ---: | ---: | ---: | ---: |",
     ]
     for doctor_id, entry in by_id.items():
-        ratings = [rating_to_5(review.get("rating", 0)) for review in entry["reviews"]]
+        ratings = [
+            review_rating_5(review)
+            for review in entry["reviews"]
+            if not review.get("duplicate_of")
+        ]
         ratings = [value for value in ratings if isinstance(value, float)]
         average = f"{sum(ratings) / len(ratings):.2f}" if ratings else "—"
         positive = sum(1 for value in ratings if value >= 4)

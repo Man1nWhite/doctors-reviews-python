@@ -47,7 +47,7 @@ def parse_prodoctorov_page(content: str, all_reviews: bool = False) -> Collector
             "date": published[0].get("content", "") if published else "",
             "date_beauty": "".join(published[0].itertext()) if published else "",
             "message": "".join(comment[0].itertext()),
-            "rating": rating[0].get("content", "0") if rating else "0",
+            "rating": rating[0].get("content") if rating else None,
         }, Platform.PRODOCTOROV))
     if not reviews:
         raise EmptyResponseError("Prodoctorov review cards contain no reviews")

@@ -15,7 +15,18 @@ async def noop_validator(url):
     return None
 
 
-@pytest.mark.parametrize(("value", "expected"), [("5", 50), ("4.5", 45), ({"value": 5}, 50), ({"value": 10, "label": "Отлично"}, 100), (None, 0)])
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("5", 100),
+        ("4.5", 90),
+        ("1", 20),
+        (0, 0),
+        ({"value": 5}, 50),
+        ({"value": 10, "label": "Отлично"}, 100),
+        (None, 0),
+    ],
+)
 def test_normalize_rating(value, expected):
     assert normalize_rating(value) == expected
 
@@ -50,7 +61,36 @@ async def test_prodoctorov_parser(mock_client, monkeypatch):
     assert result.reviews[0].id == "r1"
     assert result.reviews[0].name == "Анна"
     assert result.reviews[0].message == "Внимательный врач"
-    assert result.reviews[0].rating == 50
+    assert result.reviews[0].rating == 100
+    assert result.reviews[0].unrated is False
+
+
+@pytest.mark.asyncio
+async def test_prodoctorov_unrated_vs_zero_rating(mock_client, monkeypatch):
+    content = (
+        '<title>Отзывы врача</title>'
+        '<div class="b-review-card">'
+        '<div itemprop="reviewBody" data="r-unrated"></div>'
+        '<div class="b-review-card__comment">Положительный отзыв без оценки</div>'
+        '</div>'
+        '<div class="b-review-card">'
+        '<div itemprop="reviewBody" data="r-zero"></div>'
+        '<div class="b-review-card__comment">Ужасно</div>'
+        '<meta itemprop="ratingValue" content="0">'
+        '</div>'
+    )
+    transport = mock_client(lambda request: httpx.Response(200, text=content))
+    monkeypatch.setattr("collectors.prodoctorov.collect_with_browser", pytest.fail)
+    async with HTTPClient(("prodoctorov.ru",), client=transport, url_validator=noop_validator) as client:
+        result = await ProdoctorovCollector(client).collect("https://prodoctorov.ru/doctor/a")
+    assert len(result.reviews) == 2
+    assert result.reviews[0].rating == 0
+    assert result.reviews[0].unrated is True
+    assert result.reviews[1].rating == 0
+    assert result.reviews[1].unrated is False
+    public = result.public()["reviews"]
+    assert public[0]["unrated"] is True
+    assert "unrated" not in public[1]
 
 
 @pytest.mark.asyncio

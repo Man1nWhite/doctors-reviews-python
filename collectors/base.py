@@ -60,6 +60,7 @@ class Review(BaseModel):
     message: str = ""
     rating: int = Field(default=0, ge=0)
     source: str = ""
+    unrated: bool = False
 
 
 class CollectorResult(BaseModel):
@@ -67,7 +68,13 @@ class CollectorResult(BaseModel):
     reviews: list[Review] = Field(default_factory=list)
 
     def public(self) -> dict[str, Any]:
-        return {"title": self.title, "reviews": [review.model_dump() for review in self.reviews]}
+        items = []
+        for review in self.reviews:
+            data = review.model_dump(exclude={"unrated"})
+            if review.unrated:
+                data["unrated"] = True
+            items.append(data)
+        return {"title": self.title, "reviews": items}
 
 
 @dataclass(frozen=True)
@@ -98,6 +105,15 @@ def normalize_date(value: Any) -> str:
     return text
 
 
+def _is_rating_missing(value: Any) -> bool:
+    if value is None or isinstance(value, bool):
+        return True
+    if isinstance(value, dict):
+        inner = value.get("value")
+        return inner is None or isinstance(inner, bool) or not str(inner).strip()
+    return not str(value).strip()
+
+
 def normalize_rating(value: Any) -> int:
     if isinstance(value, dict):
         try:
@@ -110,7 +126,7 @@ def normalize_rating(value: Any) -> int:
     except (TypeError, ValueError):
         return 0
     if 0 < number <= 5:
-        number *= 10
+        number *= 20
     return max(0, int(round(number)))
 
 
@@ -119,14 +135,17 @@ def normalize_review(raw: dict[str, Any], source: Platform | str) -> Review:
     beauty = raw.get("date_beauty") or raw.get("dateBeauty") or raw.get("dateText") or raw.get("date") or published
     text = raw.get("message", raw.get("text", raw.get("body", "")))
     author = raw.get("name", raw.get("author", raw.get("authorName", "")))
+    raw_rating = raw["rating"] if "rating" in raw else raw.get("ratingValue")
+    unrated = bool(raw.get("unrated")) or _is_rating_missing(raw_rating)
     return Review(
         id=normalize_text(raw.get("id", raw.get("review_id", ""))),
         name=normalize_text(author),
         date=normalize_date(published),
         date_beauty=normalize_text(beauty),
         message=normalize_text(text),
-        rating=normalize_rating(raw.get("rating", raw.get("ratingValue", 0))),
+        rating=0 if unrated else normalize_rating(raw_rating),
         source=source.value if isinstance(source, Platform) else str(source),
+        unrated=unrated,
     )
 
 
