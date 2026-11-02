@@ -251,10 +251,64 @@ def test_ratings_cover_all_doctors():
     assert by_id["tarasova_tatyana"]["negative_topic_reviews"] == 3
     assert by_id["ermakova_evgeniya"]["penalty"] == 0
     assert by_id["dzhatieva_diana"]["negative_topic_reviews"] == 0
-    # Реальная оценка 5.0 ставит Захарян выше Авраменко при равном итоговом балле 5.0/10.
-    assert by_id["zakharyan_elizaveta"]["score_10"] == by_id["avramenko_marina"]["score_10"] == 5.0
+    # Условные оценки Авраменко не дают баллов E; в отличие от Захарян, её отзывы без числовой оценки.
+    assert by_id["zakharyan_elizaveta"]["score_10"] == 5.0
+    assert by_id["avramenko_marina"]["score_10"] == 4.2
     assert by_id["zakharyan_elizaveta"]["rank"] < by_id["avramenko_marina"]["rank"]
     assert by_id["avramenko_marina"]["assumed_reviews"] == 8
+
+
+def test_assumed_ratings_do_not_affect_scoring_or_tie_breaks(tmp_path):
+    reviews = [
+        {"message": "приятный прием", "rating_5": 4.0, "layer": "main", "usable": True},
+        {"message": "спасибо врачу", "rating_5": 4.0, "layer": "main", "usable": True},
+        {"message": "снижение веса", "rating_5": 5.0, "layer": "extra", "usable": True,
+         "rating_assumed": True},
+        {"message": "контроль сахара", "rating_5": 5.0, "layer": "extra", "usable": True,
+         "rating_assumed": True},
+    ]
+    e, average, total, main, external, hits = rate_doctors.score_review_layers(reviews)
+    assert (e, average, total, main, external, hits) == (0, 4.5, 4, 2, 2, 2)
+    assert rate_doctors.score_topic_reviews(reviews) == 0
+    assert rate_doctors.count_topic_reviews(reviews) == (0, 0)
+
+    (tmp_path / "extra_doctor_reviews.json").write_text(json.dumps({"profiles": [
+        {"doctor_id": "z_assumed", "reviews": [
+            {"message": "положительно", "rating_5": 5.0, "rating_assumed": True}
+        ]}
+    ]}), encoding="utf-8")
+    profiles = {"profiles": [
+        {"doctor_id": "z_assumed", "name": "Assumed", "experience_years": 0},
+        {"doctor_id": "a_unrated", "name": "No rating", "experience_years": 0},
+    ]}
+    ratings, _ = rate_doctors.build_ratings(profiles, tmp_path)
+    assert [row["doctor_id"] for row in ratings] == ["a_unrated", "z_assumed"]
+    assert ratings[1]["score_10"] == 0.0
+    assert ratings[1]["avg_rating_5"] == 5.0
+    assert ratings[1]["verified_avg_rating_5"] == 0.0
+
+
+def test_duplicate_flags_are_honored_in_every_review_layer(tmp_path):
+    (tmp_path / "reviews.json").write_text(json.dumps([
+        {"doctor_id": "test", "reviews": [{"message": "main", "rating": 100,
+         "duplicate_of": "original"}]}
+    ]), encoding="utf-8")
+    (tmp_path / "doctu_reviews.json").write_text(json.dumps({"profiles": [
+        {"doctor_id": "test", "reviews": [{"message": "doctu", "rating_5": 5,
+         "source_kind": "doctu_doctor", "duplicate_of": "original"}]}
+    ]}), encoding="utf-8")
+    (tmp_path / "yandex_reviews.json").write_text(json.dumps({"profiles": [
+        {"doctor_id": "test", "reviews": [{"message": "yandex", "rating_5": 5,
+         "source_kind": "yandex_doctor", "duplicate_of": "original"}]}
+    ]}), encoding="utf-8")
+    (tmp_path / "extra_doctor_reviews.json").write_text(json.dumps({"profiles": [
+        {"doctor_id": "test", "reviews": [{"message": "extra", "rating_5": 5,
+         "duplicate_of": "original"}]}
+    ]}), encoding="utf-8")
+    layers = rate_doctors.load_review_layers(tmp_path)["test"]
+    assert len(layers) == 4
+    assert all(not item["usable"] for item in layers)
+    assert rate_doctors.score_review_layers(layers)[:3] == (0, 0.0, 0)
 
 
 def test_rating_rules_are_explicit():
