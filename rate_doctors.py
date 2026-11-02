@@ -217,7 +217,7 @@ EXTRA_NOTES = {
             "Есть ли отдельный протокол ведения пациентов с ожирением и СПКЯ?",
             "Как организован скрининг поздних осложнений СД?",
         ],
-        "verdict": "Делит 9–10 место (5.0/10) с Авраменко и стоит выше по подтверждённой числовой оценке: по образованию и адресным курсам заметно сильнее середины рейтинга, но подтвердить практику по предиабету/ожирению пока нечем — один отзыв не по теме.",
+        "verdict": "Занимает 9-е место (5.0/10), выше Авраменко за счёт подтверждённой числовой оценки: по образованию и адресным курсам заметно сильнее середины рейтинга, но подтвердить практику по предиабету/ожирению пока нечем — один отзыв не по теме.",
     },
     "anohina_liliya": {
         "headline": "Свежие положительные отзывы, но образование не опубликовано",
@@ -237,7 +237,7 @@ EXTRA_NOTES = {
             "Есть ли дополнительная подготовка по ожирению, преддиабету или СД 2 типа?",
             "Какой алгоритм обследования при наборе веса?",
         ],
-        "verdict": "Нижняя группа сравнения (2.5/10) именно из-за отсутствия опубликованного образования: оценка отражает нехватку данных, а не уровень врача. Для осознанного выбора нужны документы об образовании или профиль на площадке с образовательным блоком.",
+        "verdict": "Нижняя группа сравнения (1.7/10) именно из-за отсутствия опубликованного образования и числовых оценок отзывов: оценка отражает нехватку данных, а не уровень врача. Для осознанного выбора нужны документы об образовании или профиль на площадке с образовательным блоком.",
     },
     "avramenko_marina": {
         "headline": "Хорошая база Сеченовский + МОНИКИ и заявленная работа с СД/ожирением при 8 отзывах",
@@ -248,7 +248,7 @@ EXTRA_NOTES = {
             "Стаж 7 лет, приём в «Поликлиника.ру» на Фрунзенской.",
         ],
         "risks": [
-            "Отзывы не имеют числовой оценки (`rating_assumed=true`) и не упоминают вес/преддиабет — D=0, а E ограничен 1 баллом как у внешнего слоя.",
+            "Отзывы не имеют опубликованной числовой оценки (`rating_assumed=true`) и не упоминают вес/преддиабет — D=0 и E=0.",
             "Нет к.м.н., аспирантуры и отдельных опубликованных курсов по ожирению/диабету; вторая специальность «диетолог» не заявлена.",
             "На ПроДокторов в блоках «Популярные эндокринологи» упоминается 1 отзыв, но отдельная страница врача не найдена — основной слой отзывов пуст.",
         ],
@@ -387,6 +387,7 @@ def load_review_layers(output_dir: Path) -> dict[str, list[dict]]:
                 usable = (
                     review.get("source_kind") == "doctu_doctor"
                     and not bool(review.get("unrated"))
+                    and not bool(review.get("duplicate_of"))
                 )
                 add(
                     profile["doctor_id"], review.get("message", ""),
@@ -400,6 +401,7 @@ def load_review_layers(output_dir: Path) -> dict[str, list[dict]]:
                 usable = (
                     review.get("source_kind") != "yandex_clinic"
                     and not bool(review.get("unrated"))
+                    and not bool(review.get("duplicate_of"))
                 )
                 add(
                     profile["doctor_id"], review.get("message", ""),
@@ -410,7 +412,7 @@ def load_review_layers(output_dir: Path) -> dict[str, list[dict]]:
     if extra_path.exists():
         for profile in json.loads(extra_path.read_text(encoding="utf-8")).get("profiles", []):
             for review in profile.get("reviews", []):
-                usable = not bool(review.get("unrated"))
+                usable = not bool(review.get("unrated")) and not bool(review.get("duplicate_of"))
                 add(
                     profile["doctor_id"], review.get("message", ""),
                     float(review.get("rating_5", 0)), "extra", usable,
@@ -425,31 +427,47 @@ def score_review_layers(reviews: list[dict]) -> tuple[int, float, int, int, int,
     usable = [item for item in reviews if item["usable"]]
     main_count = sum(1 for item in usable if item["layer"] == "main")
     external_count = len(usable) - main_count
-    values = [item["rating_5"] for item in usable]
-    average = round(sum(values) / len(values), 2) if values else 0.0
+    # Only published numeric ratings can contribute to criterion E. Reviews with
+    # rating_assumed are still counted/displayed, but their placeholder values
+    # must not influence the score or the external-only cap.
+    numeric_reviews = [item for item in usable if not item.get("rating_assumed")]
+    values = [item["rating_5"] for item in numeric_reviews]
+    verified_average = round(sum(values) / len(values), 2) if values else 0.0
+    all_values = [item["rating_5"] for item in usable]
+    average = round(sum(all_values) / len(all_values), 2) if all_values else 0.0
     topic_hits = sum(1 for item in usable if REVIEW_FOCUS.search(item["message"]))
-    if len(values) >= 3 and average >= 4.5:
+    if len(values) >= 3 and verified_average >= 4.5:
         base = 2
-    elif len(values) >= 3 and average >= 3.5:
+    elif len(values) >= 3 and verified_average >= 3.5:
         base = 1
     else:
         base = 0
-    if main_count == 0 and external_count > 0:
+    verified_main_count = sum(1 for item in numeric_reviews if item["layer"] == "main")
+    verified_external_count = len(numeric_reviews) - verified_main_count
+    if verified_main_count == 0 and verified_external_count > 0:
         base = min(base, 1)
-    return base, average, len(values), main_count, external_count, topic_hits
+    return base, average, len(usable), main_count, external_count, topic_hits
 
 
 def score_topic_reviews(reviews: list[dict]) -> int:
     """Тема в ПОЛОЖИТЕЛЬНЫХ отзывах: негативные упоминания балл не повышают."""
     hits = sum(
         1 for item in reviews
-        if item["usable"] and item["rating_5"] >= 4 and REVIEW_FOCUS.search(item["message"])
+        if item["usable"]
+        and not item.get("rating_assumed")
+        and item["rating_5"] >= 4
+        and REVIEW_FOCUS.search(item["message"])
     )
     return 2 if hits >= 2 else 1 if hits == 1 else 0
 
 
 def count_topic_reviews(reviews: list[dict]) -> tuple[int, int]:
-    usable = [item for item in reviews if item["usable"] and REVIEW_FOCUS.search(item["message"])]
+    usable = [
+        item for item in reviews
+        if item["usable"]
+        and not item.get("rating_assumed")
+        and REVIEW_FOCUS.search(item["message"])
+    ]
     positive = sum(1 for item in usable if item["rating_5"] >= 4)
     negative = sum(1 for item in usable if item["rating_5"] < 3)
     return positive, negative
@@ -524,7 +542,6 @@ def build_ratings(profiles: dict, reviews_dir: Path) -> tuple[list[dict], dict[s
     ratings.sort(key=lambda row: (
         -row["score_10"],
         -row["verified_avg_rating_5"],
-        -row["avg_rating_5"],
         -row["experience_years"],
         row["doctor_id"],
     ))
@@ -557,15 +574,15 @@ def render_markdown(profiles: dict, ratings: list[dict]) -> str:
         "| B | Ординатура/аспирантура | Ординатура + аспирантура или учёная степень |",
         "| C | Где учились | Профильный вуз/центр плюс ≥2 академических сигнала (отличие, к.м.н./аспирантура, ассоциации, проверенные документы, ≥4 курсов, топ-вуз + топ-ординатура) |",
         "| D | Тема в положительных отзывах | Тема звучит по границам слов минимум в 2 отзывах с оценкой ≥4 |",
-        "| E | Отзывы | Средний ≥4.5 и ≥3 уникальных оценённых отзывов по всем слоям |",
+        "| E | Отзывы | Средний ≥4.5 и ≥3 уникальных отзывов с опубликованной числовой оценкой; условные оценки исключены |",
         "| F | Стаж/актуальность | Стаж ≥15 лет и страница обновлена в 2025–2026 |",
         "",
         "Источники отзывов: основной слой `reviews.json`, отзывы о враче с ДОКТУ и Яндекс.Медицины ",
         "(отзывы о клиниках, отзывы без числовой оценки `unrated=true` и межплатформенные дубли `duplicate_of` исключены из среднего), ",
         "а также `extra_doctor_reviews.json` для трёх новых врачей. ",
         "На сайте клиники числовая оценка не публикуется: положительным текстам условно присвоено 5.0 ",
-        "с пометкой `rating_assumed=true`, поэтому их средний балл условный и не даёт преимущества на тай-брейке перед реальными оценками. ",
-        "Если отзывы есть только во внешних слоях, критерий E ограничен 1 баллом. ",
+        "с пометкой `rating_assumed=true`; они остаются в справочном общем среднем, но не влияют на критерий E, критерий D или тай-брейки. ",
+        "Для E учитываются только опубликованные числовые оценки; если такие отзывы есть только во внешних слоях, критерий E ограничен 1 баллом. ",
         "**Негативные отзывы по теме (оценка <3) не повышают D**; при двух и более из суммы вычитается 1 балл. ",
         "В текущих данных штраф применён только к Тарасовой: три отзыва Яндекса с оценкой 1.0 предметно ",
         "жалуются на резкую прибавку веса (+11 кг), повышенный сахар и пропуск диабетических осложнений. Яндекс отдаёт лишь первые 5 отзывов, ",
@@ -583,17 +600,30 @@ def render_markdown(profiles: dict, ratings: list[dict]) -> str:
         "",
         "## Рейтинг",
         "",
-        "| № | Врач | Балл /10 | A | B | C | D | E | F | Штраф | Ср. балл | Отзывов |",
+        "| № | Врач | Балл /10 | A | B | C | D | E | F | Штраф | Ср. балл (числ.) | Отзывов всего |",
         "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in ratings:
         c = row["components"]
+        verified_average = (
+            f"{row['verified_avg_rating_5']:.2f}"
+            if row["review_count"] > row["assumed_reviews"]
+            else "—"
+        )
         lines.append(
             f"| {row['rank']} | {row['doctor']} | **{row['score_10']:.1f}** | "
             f"{c['A']} | {c['B']} | {c['C']} | {c['D']} | {c['E']} | {c['F']} | "
-            f"−{row['penalty']} | {row['avg_rating_5']:.2f} | {row['review_count']} |"
+            f"−{row['penalty']} | {verified_average} | {row['review_count']} |"
         )
-    lines += ["", "## Где учились", "", "| Врач | Базовый вуз | Ординатура / аспирантура | Профильные курсы / практика |", "| --- | --- | --- | --- |"]
+    lines += [
+        "",
+        "Средний балл в таблице рассчитан только по опубликованным числовым оценкам; `Отзывов всего` включает условно оценённые текстовые отзывы.",
+        "",
+        "## Где учились",
+        "",
+        "| Врач | Базовый вуз | Ординатура / аспирантура | Профильные курсы / практика |",
+        "| --- | --- | --- | --- |",
+    ]
     for row in ratings:
         lines.append(
             f"| {row['doctor']} | {row['base_university']} | {row['residency']} | {row['focus_courses']} |"
@@ -636,7 +666,7 @@ def render_markdown(profiles: dict, ratings: list[dict]) -> str:
         "`output/extra_doctor_reviews.json`, `output/top3_detail.md` (лидеры), `output/comparison_extra.md` (новые врачи).",
         "",
     ]
-    return "\n".join(lines)
+    return "\n".join(line.rstrip() for line in lines)
 
 
 def _plural_reviews(count: int) -> str:
@@ -696,6 +726,12 @@ def render_detail(
             if row.get("assumed_reviews")
             else ""
         )
+        verified_count = row["review_count"] - row["assumed_reviews"]
+        average_note = (
+            f"средний опубликованных оценок **{row['verified_avg_rating_5']:.2f} из {verified_count}**"
+            if verified_count
+            else "**нет опубликованных числовых оценок**"
+        )
         years = int(row["experience_years"])
         lines += [
             f"## {index}. {row['doctor']} — {row['score_10']:.1f}/10",
@@ -703,8 +739,8 @@ def render_detail(
             f"*{notes['headline']}*",
             "",
             f"Специальность: **{row['specialty']}** · стаж **{years} {_plural_years(years)}** · "
-            f"страница обновлена **{row['page_updated']}** · средний балл отзывов **{row['avg_rating_5']:.2f}** "
-            f"из **{row['review_count']}** {_plural_reviews(row['review_count'])} "
+            f"страница обновлена **{row['page_updated']}** · {average_note} "
+            f"при **{row['review_count']}** {_plural_reviews(row['review_count'])} всего "
             f"(основной слой {row['main_reviews']}, внешние {row['external_reviews']}{assumed_note}).",
             "",
             f"Разбивка: A={c['A']} (курсы), B={c['B']} (ординатура), C={c['C']} (вуз), "
@@ -765,12 +801,12 @@ def render_detail(
         lines += [f"- {url}" for url in profile.get("source_urls", [])]
         lines += ["", "---", ""]
     lines += closing + [""]
-    return "\n".join(lines)
+    return "\n".join(line.rstrip() for line in lines)
 
 
 def write_csv(ratings: list[dict], path: Path) -> None:
     with path.open("w", encoding="utf-8-sig", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=CSV_FIELDS, extrasaction="ignore")
+        writer = csv.DictWriter(file, fieldnames=CSV_FIELDS, extrasaction="ignore", lineterminator="\n")
         writer.writeheader()
         for row in ratings:
             flat = {**row, **{key: row["components"][key] for key in CRITERIA}}

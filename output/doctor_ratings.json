@@ -350,45 +350,6 @@
       "cohort": "added"
     },
     {
-      "doctor_id": "avramenko_marina",
-      "doctor": "Авраменко Марина Владимировна",
-      "specialty": "эндокринолог",
-      "score_10": 5.0,
-      "raw_score": 6,
-      "penalty": 0,
-      "adjusted_raw": 6,
-      "components": {
-        "A": 2,
-        "B": 1,
-        "C": 1,
-        "D": 0,
-        "E": 1,
-        "F": 1
-      },
-      "avg_rating_5": 5.0,
-      "verified_avg_rating_5": 0.0,
-      "review_count": 8,
-      "main_reviews": 0,
-      "external_reviews": 8,
-      "assumed_reviews": 8,
-      "topic_review_hits": 0,
-      "positive_topic_reviews": 0,
-      "negative_topic_reviews": 0,
-      "base_university": "Первый МГМУ им. И.М. Сеченова",
-      "residency": "МОНИКИ им. М.Ф. Владимирского (2021, Ординатура)",
-      "focus_courses": "сахарный диабет 1 и 2 типа; метаболический синдром",
-      "experience_years": 7,
-      "page_updated": "2026-11-02",
-      "rationale": "Сеченовский университет (2019) и ординатура в МОНИКИ (2021, подготовка кадров высшей квалификации по эндокринологии). Специализация на сайте клиники: СД 1 и 2 типа, щитовидная железа, надпочечники, фосфорно-кальциевый обмен; на агрегаторе дополнительно указаны метаболический синдром и ожирение. 8 положительных отзывов на сайте клиники (2025–2026) без числовых оценок; на ПроДокторов упоминается 1 отзыв в блоке «Популярные эндокринологи», но отдельная страница не найдена.",
-      "source_urls": [
-        "https://polyclinika.ru/experts/avramenko-marina-vladimirovna/",
-        "https://farmamir.ru/type_doc/avramenko_marina_2/",
-        "https://prodoctorov.ru/moskva/vrach/713861-kotihina/"
-      ],
-      "rank": 10,
-      "cohort": "added"
-    },
-    {
       "doctor_id": "seferyan_sergey",
       "doctor": "Сеферян Сергей Левонович",
       "specialty": "эндокринолог, терапевт",
@@ -422,7 +383,7 @@
       "source_urls": [
         "https://prodoctorov.ru/moskva/vrach/797596-seferyan/"
       ],
-      "rank": 11,
+      "rank": 10,
       "cohort": "original"
     },
     {
@@ -459,7 +420,7 @@
       "source_urls": [
         "https://prodoctorov.ru/moskva/vrach/509389-skorik/"
       ],
-      "rank": 12,
+      "rank": 11,
       "cohort": "original"
     },
     {
@@ -497,8 +458,47 @@
         "https://prodoctorov.ru/moskva/vrach/216396-kazakov/",
         "https://docdoc.ru/doctor/Kazakov_Yuriy"
       ],
-      "rank": 13,
+      "rank": 12,
       "cohort": "original"
+    },
+    {
+      "doctor_id": "avramenko_marina",
+      "doctor": "Авраменко Марина Владимировна",
+      "specialty": "эндокринолог",
+      "score_10": 4.2,
+      "raw_score": 5,
+      "penalty": 0,
+      "adjusted_raw": 5,
+      "components": {
+        "A": 2,
+        "B": 1,
+        "C": 1,
+        "D": 0,
+        "E": 0,
+        "F": 1
+      },
+      "avg_rating_5": 5.0,
+      "verified_avg_rating_5": 0.0,
+      "review_count": 8,
+      "main_reviews": 0,
+      "external_reviews": 8,
+      "assumed_reviews": 8,
+      "topic_review_hits": 0,
+      "positive_topic_reviews": 0,
+      "negative_topic_reviews": 0,
+      "base_university": "Первый МГМУ им. И.М. Сеченова",
+      "residency": "МОНИКИ им. М.Ф. Владимирского (2021, Ординатура)",
+      "focus_courses": "сахарный диабет 1 и 2 типа; метаболический синдром",
+      "experience_years": 7,
+      "page_updated": "2026-11-02",
+      "rationale": "Сеченовский университет (2019) и ординатура в МОНИКИ (2021, подготовка кадров высшей квалификации по эндокринологии). Специализация на сайте клиники: СД 1 и 2 типа, щитовидная железа, надпочечники, фосфорно-кальциевый обмен; на агрегаторе дополнительно указаны метаболический синдром и ожирение. 8 положительных отзывов на сайте клиники (2025–2026) без числовых оценок; на ПроДокторов упоминается 1 отзыв в блоке «Популярные эндокринологи», но отдельная страница не найдена.",
+      "source_urls": [
+        "https://polyclinika.ru/experts/avramenko-marina-vladimirovna/",
+        "https://farmamir.ru/type_doc/avramenko_marina_2/",
+        "https://prodoctorov.ru/moskva/vrach/713861-kotihina/"
+      ],
+      "rank": 13,
+      "cohort": "added"
     },
     {
       "doctor_id": "gordeeva_alla",
@@ -577,44 +577,6 @@
       "cohort": "original"
     },
     {
-      "doctor_id": "anohina_liliya",
-      "doctor": "Анохина Лилия Ивановна",
-      "specialty": "эндокринолог",
-      "score_10": 2.5,
-      "raw_score": 3,
-      "penalty": 0,
-      "adjusted_raw": 3,
-      "components": {
-        "A": 1,
-        "B": 0,
-        "C": 0,
-        "D": 0,
-        "E": 1,
-        "F": 1
-      },
-      "avg_rating_5": 5.0,
-      "verified_avg_rating_5": 0.0,
-      "review_count": 3,
-      "main_reviews": 0,
-      "external_reviews": 3,
-      "assumed_reviews": 3,
-      "topic_review_hits": 0,
-      "positive_topic_reviews": 0,
-      "negative_topic_reviews": 0,
-      "base_university": "—",
-      "residency": "—",
-      "focus_courses": "—",
-      "experience_years": 5,
-      "page_updated": "2026-11-02",
-      "rationale": "Врач-эндокринолог сети «Поликлиника.ру», приём на Таганской / Пролетарской, стаж 5 лет по сайту клиники. Образование и повышение квалификации на найденных публичных страницах не опубликованы — это единственный профиль в сравнении с пустым блоком образования, балл за «где учились» не начислен. Три свежих положительных отзыва (сентябрь 2026) на сайте клиники, но без числовой оценки и без упоминаний предиабета/ожирения.",
-      "source_urls": [
-        "https://polyclinika.ru/direction2/endokrinologiya/",
-        "https://polyclinika.ru/tech/sindrom-itsenkokushinga-simptomy-diagnostika-lechenie/"
-      ],
-      "rank": 16,
-      "cohort": "added"
-    },
-    {
       "doctor_id": "nezhvedilova_salihat",
       "doctor": "Нежведилова Салихат Мурадовна",
       "specialty": "эндокринолог",
@@ -648,7 +610,7 @@
       "source_urls": [
         "https://prodoctorov.ru/moskva/vrach/1365142-nezhvedilova/"
       ],
-      "rank": 17,
+      "rank": 16,
       "cohort": "original"
     },
     {
@@ -685,8 +647,46 @@
       "source_urls": [
         "https://prodoctorov.ru/moskva/vrach/1415891-sidorova/"
       ],
-      "rank": 18,
+      "rank": 17,
       "cohort": "original"
+    },
+    {
+      "doctor_id": "anohina_liliya",
+      "doctor": "Анохина Лилия Ивановна",
+      "specialty": "эндокринолог",
+      "score_10": 1.7,
+      "raw_score": 2,
+      "penalty": 0,
+      "adjusted_raw": 2,
+      "components": {
+        "A": 1,
+        "B": 0,
+        "C": 0,
+        "D": 0,
+        "E": 0,
+        "F": 1
+      },
+      "avg_rating_5": 5.0,
+      "verified_avg_rating_5": 0.0,
+      "review_count": 3,
+      "main_reviews": 0,
+      "external_reviews": 3,
+      "assumed_reviews": 3,
+      "topic_review_hits": 0,
+      "positive_topic_reviews": 0,
+      "negative_topic_reviews": 0,
+      "base_university": "—",
+      "residency": "—",
+      "focus_courses": "—",
+      "experience_years": 5,
+      "page_updated": "2026-11-02",
+      "rationale": "Врач-эндокринолог сети «Поликлиника.ру», приём на Таганской / Пролетарской, стаж 5 лет по сайту клиники. Образование и повышение квалификации на найденных публичных страницах не опубликованы — это единственный профиль в сравнении с пустым блоком образования, балл за «где учились» не начислен. Три свежих положительных отзыва (сентябрь 2026) на сайте клиники, но без числовой оценки и без упоминаний предиабета/ожирения.",
+      "source_urls": [
+        "https://polyclinika.ru/direction2/endokrinologiya/",
+        "https://polyclinika.ru/tech/sindrom-itsenkokushinga-simptomy-diagnostika-lechenie/"
+      ],
+      "rank": 18,
+      "cohort": "added"
     }
   ]
 }
