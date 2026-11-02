@@ -1,0 +1,196 @@
+{
+  "source": "polyclinika.ru, napopravku.ru",
+  "description": "Отзывы трёх врачей, добавленных в сравнение по просьбе пользователя. Источники не входят в SOURCE_CONFIGS репозитория, поэтому слой хранится отдельно от output/reviews.json. На сайте клиники числовая оценка не публикуется: для положительных текстовых отзывов выставлено rating_5=5.0 с явным флагом rating_assumed=true (средний балл по таким врачам условный).",
+  "collected_at": "2026-11-02T00:00:00+00:00",
+  "profiles": [
+    {
+      "doctor_id": "zakharyan_elizaveta",
+      "doctor": "Захарян Елизавета Андреевна",
+      "clinic": "«Поликлиника.ру» на Таганской",
+      "platform": "clinic_site",
+      "url": "https://polyclinika.ru/experts/zakharyan-elizaveta-andreevna-102986/",
+      "total_reviews": 1,
+      "fetched_reviews": 1,
+      "reviews": [
+        {
+          "id": "napopravku-zakharyan-1",
+          "name": "Пациент",
+          "date": "",
+          "date_beauty": "без даты",
+          "message": "После длительного и неправильного лечения гормонов, связанных с МЦ, обратилась к данному эндокринологу. Понравился прием тем, что меня внимательно выслушали и дали наконец-то четкие ответы на мои вопросы. Подробно описала процессы гипофиза для понимания моей картины, было интересно слушать и понять причину повышенного гормона. Захарян Е.А. дала конкретные рекомендации и назначила план лечения. Врач квалифицированный, компетентный, тактичный, задавала уточняющие вопросы и было видно, что действительно открыта именно для лечения пациента. Обязательно приду еще раз!",
+          "rating_5": 5.0,
+          "rating_100": 100,
+          "rating_assumed": false,
+          "source_kind": "aggregator_doctor",
+          "source_label": "НаПоправку, рейтинг 5.0 (1 отзыв)",
+          "source_url": "https://napopravku.ru/moskva/doctor-profile/zaharan-elizaveta-andreevna/"
+        }
+      ]
+    },
+    {
+      "doctor_id": "anohina_liliya",
+      "doctor": "Анохина Лилия Ивановна",
+      "clinic": "«Поликлиника.ру» на Таганской / Пролетарской",
+      "platform": "clinic_site",
+      "url": "https://polyclinika.ru/direction2/endokrinologiya/",
+      "total_reviews": 3,
+      "fetched_reviews": 3,
+      "reviews": [
+        {
+          "id": "clinic-anohina-1",
+          "name": "Пациент",
+          "date": "2026-09-23",
+          "date_beauty": "23.09.2026",
+          "message": "Хочу выразить благодарность Лилии Ивановне за ее работу и внимательное отношение к пациенту. Назначила новый курс лечения и дополнительное обследование. СПАСИБО.",
+          "rating_5": 5.0,
+          "rating_100": 100,
+          "rating_assumed": true,
+          "source_kind": "clinic_doctor",
+          "source_label": "Сайт клиники, числовая оценка не указана",
+          "source_url": "https://polyclinika.ru/direction2/endokrinologiya/"
+        },
+        {
+          "id": "clinic-anohina-2",
+          "name": "Валерия",
+          "date": "2026-09-06",
+          "date_beauty": "06.09.2026",
+          "message": "Лучший врач-эндокринолог, у которого я была на приемах.",
+          "rating_5": 5.0,
+          "rating_100": 100,
+          "rating_assumed": true,
+          "source_kind": "clinic_doctor",
+          "source_label": "Сайт клиники, числовая оценка не указана",
+          "source_url": "https://polyclinika.ru/direction2/endokrinologiya/"
+        },
+        {
+          "id": "clinic-anohina-3",
+          "name": "Ирина",
+          "date": "2026-09-02",
+          "date_beauty": "02.09.2026",
+          "message": "Добрый день! Очень грамотный врач. Профессионал своего дела! Я довольна.",
+          "rating_5": 5.0,
+          "rating_100": 100,
+          "rating_assumed": true,
+          "source_kind": "clinic_doctor",
+          "source_label": "Сайт клиники, числовая оценка не указана",
+          "source_url": "https://polyclinika.ru/direction2/endokrinologiya/"
+        }
+      ]
+    },
+    {
+      "doctor_id": "avramenko_marina",
+      "doctor": "Авраменко Марина Владимировна",
+      "clinic": "«Поликлиника.ру» на Фрунзенской",
+      "platform": "clinic_site",
+      "url": "https://polyclinika.ru/experts/avramenko-marina-vladimirovna/",
+      "total_reviews": 8,
+      "fetched_reviews": 8,
+      "reviews": [
+        {
+          "id": "clinic-avramenko-1",
+          "name": "Ирина",
+          "date": "2026-10-14",
+          "date_beauty": "14.10.2026",
+          "message": "Впервые у этого врача, очень довольна, все подробно рассказывает и внимательна к жалобам, назначены обследования и анализы, думаю, и в дальнейшем будут даны профессиональные рекомендации, спасибо. Рекомендую. Пока была только на первом приёме, но впечатления самые положительные. Обязательно собираюсь прийти на повторный приём уже с результатами всех обследований. Спасибо за внимательное и неформальное отношение к пациенту!",
+          "rating_5": 5.0,
+          "rating_100": 100,
+          "rating_assumed": true,
+          "source_kind": "clinic_doctor",
+          "source_label": "Сайт клиники, числовая оценка не указана",
+          "source_url": "https://polyclinika.ru/experts/avramenko-marina-vladimirovna/"
+        },
+        {
+          "id": "clinic-avramenko-2",
+          "name": "Светлана",
+          "date": "2026-09-06",
+          "date_beauty": "06.09.2026",
+          "message": "Врач ответила на все вопросы по дальнейшему лечению, все понятно объяснила. Хочу выразить благодарность врачу за прием. Очень вежливый и грамотный специалист, приду еще.",
+          "rating_5": 5.0,
+          "rating_100": 100,
+          "rating_assumed": true,
+          "source_kind": "clinic_doctor",
+          "source_label": "Сайт клиники, числовая оценка не указана",
+          "source_url": "https://polyclinika.ru/experts/avramenko-marina-vladimirovna/"
+        },
+        {
+          "id": "clinic-avramenko-3",
+          "name": "Мария",
+          "date": "2026-08-19",
+          "date_beauty": "19.08.2026",
+          "message": "Всегда абсолютно довольна приемом у Марины Владимировны: четко, коротко, по делу. Радует улучшающееся самочувствие тела и духа, всем желаю здоровья :) врач топ.",
+          "rating_5": 5.0,
+          "rating_100": 100,
+          "rating_assumed": true,
+          "source_kind": "clinic_doctor",
+          "source_label": "Сайт клиники, числовая оценка не указана",
+          "source_url": "https://polyclinika.ru/experts/avramenko-marina-vladimirovna/"
+        },
+        {
+          "id": "clinic-avramenko-4",
+          "name": "Мария",
+          "date": "2026-08-05",
+          "date_beauty": "05.08.2026",
+          "message": "Самый лучший, приятный, эмпатичный и профессиональный эндокринолог в моей практике. Отвечает на все вопросы, дает четкий план лечения, готовится к каждому приему досконально.",
+          "rating_5": 5.0,
+          "rating_100": 100,
+          "rating_assumed": true,
+          "source_kind": "clinic_doctor",
+          "source_label": "Сайт клиники, числовая оценка не указана",
+          "source_url": "https://polyclinika.ru/experts/avramenko-marina-vladimirovna/"
+        },
+        {
+          "id": "clinic-avramenko-5",
+          "name": "Мария",
+          "date": "2026-06-10",
+          "date_beauty": "10.06.2026",
+          "message": "Великолепный позитивный Человек и Врач. Вдумчивая и толковая. Highly recommend!",
+          "rating_5": 5.0,
+          "rating_100": 100,
+          "rating_assumed": true,
+          "source_kind": "clinic_doctor",
+          "source_label": "Сайт клиники, числовая оценка не указана",
+          "source_url": "https://polyclinika.ru/experts/avramenko-marina-vladimirovna/"
+        },
+        {
+          "id": "clinic-avramenko-6",
+          "name": "Фахрова Дина Вадимовна",
+          "date": "2025-10-22",
+          "date_beauty": "22.10.2025",
+          "message": "Понравилась доктор, спокойная, конкретная, все по делу, никаких лишних процедур не назначала.",
+          "rating_5": 5.0,
+          "rating_100": 100,
+          "rating_assumed": true,
+          "source_kind": "clinic_doctor",
+          "source_label": "Сайт клиники, числовая оценка не указана",
+          "source_url": "https://polyclinika.ru/experts/avramenko-marina-vladimirovna/"
+        },
+        {
+          "id": "clinic-avramenko-7",
+          "name": "Пациент",
+          "date": "2025-06-25",
+          "date_beauty": "25.06.2025",
+          "message": "Очень классный врач! Добродушно встретила и все рассказала.",
+          "rating_5": 5.0,
+          "rating_100": 100,
+          "rating_assumed": true,
+          "source_kind": "clinic_doctor",
+          "source_label": "Сайт клиники, числовая оценка не указана",
+          "source_url": "https://polyclinika.ru/experts/avramenko-marina-vladimirovna/"
+        },
+        {
+          "id": "clinic-avramenko-8",
+          "name": "Пациент",
+          "date": "2025-03-12",
+          "date_beauty": "12.03.2025",
+          "message": "Очень компетентный врач, все рассказала, направила на анализы, исключающие заболевание, дала рекомендации. Рекомендую.",
+          "rating_5": 5.0,
+          "rating_100": 100,
+          "rating_assumed": true,
+          "source_kind": "clinic_doctor",
+          "source_label": "Сайт клиники, числовая оценка не указана",
+          "source_url": "https://polyclinika.ru/experts/avramenko-marina-vladimirovna/"
+        }
+      ]
+    }
+  ]
+}

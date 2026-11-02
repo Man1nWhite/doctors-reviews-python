@@ -1,0 +1,96 @@
+[
+  {
+    "doctor": "Ирина Сергеевна Вяткина",
+    "doctor_id": "vyatkina_irina",
+    "platform": "sberzdorovie",
+    "reason": "URL не указан (needs_url: Точная ссылка docdoc.ru/sberhealth.ru не найдена; отзывы собраны с ПроДокторов по ссылке пользователя)"
+  },
+  {
+    "doctor": "Сеферян Сергей Левонович",
+    "doctor_id": "seferyan_sergey",
+    "platform": "sberzdorovie",
+    "reason": "URL не указан (needs_url: Ссылка docdoc.ru/sberhealth.ru не подтверждена; Яндекс даёт ДОКТУ и НаПоправку)"
+  },
+  {
+    "doctor": "Гордеева Алла Владимировна",
+    "doctor_id": "gordeeva_alla",
+    "platform": "sberzdorovie",
+    "reason": "URL не указан (needs_url: docdoc.ru/doctor/Gordeeva_Alla ведёт к Алле Юрьевне, акушеру; точная ссылка не найдена. Профиль на ПроДокторов подтверждён, 5 отзывов собраны с doctu.ru отдельным слоем)"
+  },
+  {
+    "doctor": "Гордеева Алла Владимировна",
+    "doctor_id": "gordeeva_alla",
+    "platform": "prodoctorov",
+    "url": "https://prodoctorov.ru/moskva/vrach/64578-gordeeva/",
+    "reason": "Профиль подтверждён, но на странице 0 отзывов; 5 отзывов о враче собраны с doctu.ru в отдельный слой output/doctu_reviews.*"
+  },
+  {
+    "doctor": "Евстигнеева Ольга Анатольевна",
+    "doctor_id": "evstigneeva_olga",
+    "platform": "sberzdorovie",
+    "reason": "URL не указан (needs_url: Ссылка docdoc.ru/sberhealth.ru не подтверждена)"
+  },
+  {
+    "doctor": "Быстрова Татьяна Викторовна",
+    "doctor_id": "bystrova_tatyana",
+    "platform": "sberzdorovie",
+    "reason": "URL не указан (needs_url: docdoc.ru/doctor/Bystrova_Natalya_4 — другой врач; точный URL не найден)"
+  },
+  {
+    "doctor": "Ермакова Евгения Михайловна",
+    "doctor_id": "ermakova_evgeniya",
+    "platform": "sberzdorovie",
+    "reason": "URL не указан (needs_url: Ссылка docdoc.ru/sberhealth.ru не подтверждена)"
+  },
+  {
+    "doctor": "Скорик Елена Сергеевна",
+    "doctor_id": "skorik_elena",
+    "platform": "sberzdorovie",
+    "reason": "URL не указан (needs_url: docdoc.ru/doctor/Skorik_Elena ведёт к Елене Станиславовне (УЗИ); отзывы собраны с ПроДокторов по ссылке пользователя)"
+  },
+  {
+    "doctor": "Тарасова Татьяна Сергеевна",
+    "doctor_id": "tarasova_tatyana",
+    "platform": "sberzdorovie",
+    "reason": "URL не указан (needs_url: Ссылка docdoc.ru/sberhealth.ru не подтверждена; ранее в поиске встречались однофамильцы)"
+  },
+  {
+    "doctor": "Нежведилова Салихат Мурадовна",
+    "doctor_id": "nezhvedilova_salihat",
+    "platform": "sberzdorovie",
+    "reason": "URL не указан (needs_url: Ссылка docdoc.ru/sberhealth.ru не найдена)"
+  },
+  {
+    "doctor": "Нежведилова Салихат Мурадовна",
+    "doctor_id": "nezhvedilova_salihat",
+    "platform": "prodoctorov",
+    "url": "https://prodoctorov.ru/moskva/vrach/1365142-nezhvedilova/",
+    "reason": "Профиль подтверждён, но на странице 0 отзывов"
+  },
+  {
+    "doctor": "Дарханова Евгения Владимировна",
+    "doctor_id": "darkhanova_evgeniya",
+    "platform": "sberzdorovie",
+    "url": "https://uud.docdoc.ru/doctor/Balzhinimaeva_Erzhena_2?pid=27997",
+    "reason": "URL найден, но отзывы не собраны: hosted API /api/v1/getReviews недоступен"
+  },
+  {
+    "doctor": "Севостьяненко Елизавета Александровна",
+    "doctor_id": "sevostyanenko_elizaveta",
+    "platform": "sberzdorovie",
+    "reason": "URL не указан (needs_url: Ссылка docdoc.ru/sberhealth.ru не подтверждена)"
+  },
+  {
+    "doctor": "Сидорова Елена Андреевна",
+    "doctor_id": "sidorova_elena",
+    "platform": "sberzdorovie",
+    "reason": "URL не указан (needs_url: Ссылка docdoc.ru/sberhealth.ru не найдена; в поиске много однофамильцев)"
+  },
+  {
+    "doctor": "Сидорова Елена Андреевна",
+    "doctor_id": "sidorova_elena",
+    "platform": "prodoctorov",
+    "url": "https://prodoctorov.ru/moskva/vrach/1415891-sidorova/",
+    "reason": "Профиль подтверждён, но на странице 0 отзывов"
+  }
+]

@@ -1,0 +1,751 @@
+#!/usr/bin/env python3
+"""Оценка врачей по 10-балльной шкале для запроса «предиабет, ожирение».
+
+Это НЕ клинический рейтинг и НЕ медицинская рекомендация. Балл — это
+«индекс соответствия открытого профиля заданной теме»: он показывает, насколько
+публичные данные (образование, курсы, практика, отзывы) подтверждают работу с
+предиабетом/ожирением. Отсутствие данных в открытых источниках не означает
+отсутствие квалификации.
+
+Входные данные:
+    output/doctor_profiles.json  — образование/курсы/стаж (собрано со страниц)
+    output/reviews.json          — основной слой отзывов
+    output/doctu_reviews.json    — отзывы ДОКТУ о враче
+    output/yandex_reviews.json   — отзывы Яндекса (кроме отзывов о клинике)
+
+Методика: 6 критериев, каждый 0..2, максимум 12 → нормируется в 0..10.
+За ≥2 негативных отзыва именно по теме вычитается 1 штрафной балл.
+
+    A Профильное обучение   — курсы/программы по ожирению, преддиабету,
+                              СД2, диетологии, метаболизму
+    B Ординатура/аспирантура — профильная последипломная подготовка
+    C Где учились           — базовый вуз + академические сигналы
+                              (с отличием, к.м.н., ассоциации, документы)
+    D Практика по теме      — тема звучит в ПОЛОЖИТЕЛЬНЫХ отзывах
+    E Отзывы               — средний балл и объём по всем слоям
+    F Стаж/актуальность    — опыт и свежесть страницы
+
+Запуск:
+    python rate_doctors.py                     # JSON + CSV + Markdown + разбор топ-3
+    python rate_doctors.py --append-summary    # ещё секция в output/summary.md
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import re
+from pathlib import Path
+from typing import Any
+
+from yandex_export import append_summary as _append_summary
+
+START = "<!-- RATINGS-START -->"
+END = "<!-- RATINGS-END -->"
+
+CRITERIA = {
+    "A": "Профильное обучение (ожирение/преддиабет/СД2/диетология)",
+    "B": "Ординатура и аспирантура",
+    "C": "Где учились: вуз и академические сигналы",
+    "D": "Тема в положительных отзывах",
+    "E": "Отзывы: средний балл и объём",
+    "F": "Стаж и актуальность профиля",
+}
+
+STRONG_FOCUS = re.compile(
+    r"ожирен|преддиабет|предиабет|сахарн\w+ диабет|диетолог|метаболическ|"
+    r"инсулинорезистент|нглт|flash|бариатри|рпп|школ\w+ (?:обучения )?больн\w+|"
+    r"снижени\w+ веса|лишн\w+ вес|повышенн\w+ сахар",
+    re.IGNORECASE,
+)
+GENERAL_FOCUS = re.compile(r"эндокринолог", re.IGNORECASE)
+REVIEW_FOCUS = re.compile(
+    r"предиабет|преддиабет|сахарн\w+ диабет|инсулинорезистент|глюкоз|сахар|"
+    r"ожирен|похуде|лишн\w+ вес|набор\w+ веса|снижени\w+ веса|вес|метабол|"
+    r"диет|рпп|инсулин|метформин|оземпик|маунжаро|гликир|кортизол",
+    re.IGNORECASE,
+)
+TOP_INSTITUTIONS = (
+    "Сеченова", "Пирогова", "РНИМУ", "Дружбы народов", "РУДН",
+    "НМИЦ", "Эндокринологический научный центр", "ЭНЦ",
+    "МОНИКИ", "РМАНПО", "РМАПО", "Дедова",
+)
+
+CSV_FIELDS = [
+    "rank", "doctor_id", "doctor", "cohort", "score_10", "A", "B", "C", "D", "E", "F",
+    "raw_score", "penalty", "adjusted_raw",
+    "avg_rating_5", "review_count", "main_reviews", "external_reviews",
+    "positive_topic_reviews", "negative_topic_reviews",
+    "base_university", "residency", "focus_courses", "specialty",
+    "experience_years", "page_updated", "rationale",
+]
+
+# Содержательные выводы по лидерам. Цифры подтягиваются из расчёта автоматически.
+TOP3_NOTES = {
+    "ermakova_evgeniya": {
+        "headline": "Самое прямое попадание в запрос при идеальных, но пока коротких отзывах",
+        "strengths": [
+            "Единственный из 15 врачей с курсом, который называется буквально «Метаболические нарушения. Ожирение. Преддиабет» (Российская ассоциация эндокринологов, 2021).",
+            "Вокруг него выстроен целый кластер: СД 2 типа (МОНИКИ 2022, ЦГМА 2023), ингибиторы НГЛТ-2, Flash-мониторинг гликемии Abbott (дважды), междисциплинарный подход к СД2.",
+            "Переподготовка по УЗД позволяет самой смотреть щитовидную железу и органы брюшной полости — полезно при оценке ожирения и стеатоза печени.",
+            "Документы (диплом, свидетельство об ординатуре) проверены ПроДокторов; страница обновлена 29.10.2026.",
+            "Оба отзыва на ПроДокторов — 5.0 и оба именно про «вес, метаболизм» / «набор веса, усталость»; все 5 отзывов Яндекса также 5.0.",
+        ],
+        "risks": [
+            "Стаж 6 лет (выпуск 2020, ординатура 2022) — самый короткий среди лидеров; нет к.м.н., аспирантуры и ассоциаций.",
+            "Всего 2 отзыва в основном слое и 3 пригодных на Яндексе: выборка маленькая и очень свежая (октябрь 2026, Яндекс — 2023–2026).",
+            "Ординатура в МОНИКИ, а не в НМИЦ эндокринологии; базовый вуз — РУДН без отличия.",
+            "В Яндексе 2 из 5 отзывов помечены как отзывы о клинике — в оценку врача они не вошли.",
+        ],
+        "questions": [
+            "Какой алгоритм обследования при преддиабете: НbA1c, глюкоза натощак, инсулин/HOMA-IR, липидный профиль?",
+            "Работает ли с инсулинорезистентностью без сразу назначаемых препаратов, и когда считает нужной терапию?",
+            "Есть ли опыт ведения пациентов на аналогах ГПП-1 и как организован мониторинг (в т.ч. Flash)?",
+        ],
+        "verdict": "Лучший выбор, если приоритет — именно современная доказательная работа с предиабетом/весом и важны свежие профильные курсы; с поправкой на небольшой стаж и короткую историю отзывов.",
+    },
+    "dzhatieva_diana": {
+        "headline": "Лучший баланс профильного образования, диетологии и реальных отзывов о преддиабете",
+        "strengths": [
+            "Ординатура в НМИЦ эндокринологии (2019) плюс отдельная переподготовка по диетологии в том же 2019 году — редкое сочетание для запроса «ожирение».",
+            "Диплом СОГМА с отличием (2017), документы проверены, членство в European Society of Endocrinology и Российской ассоциации эндокринологов.",
+            "10 отзывов, средний 4.90, без единого отрицательного; страница обновлена 05.06.2026.",
+            "Прямые тематические отзывы: пациентка с преддиабетом пишет «благодаря ей ко мне ещё не пришёл сахарный диабет»; две пациентки отдельно отмечают РПП-информированность и работу со снижением веса без давления.",
+            "Видна культура «не назначать лишнего»: пересмотр Бетесда-4 → Бетесда-2 и отмена ненужной операции, отказ сразу выписывать препараты для похудения с направлением к психологу при РПП.",
+        ],
+        "risks": [
+            "Стаж 9 лет — меньше, чем у Тарасовой/Огневой/Быстровой; нет к.м.н. и аспирантуры (только ординатура).",
+            "Значительная часть отзывов — щитовидная железа, гипофиз, ТТГ, а не метаболизм: тематических положительных отзывов 3 из 10.",
+            "Нет отдельного курса по СД2/НГЛТ-2/мониторингу гликемии, который есть у Ермаковой.",
+            "Профиль Яндекс.Медицины для этого врача в выгрузке отсутствует — нет второго независимого слоя отзывов.",
+        ],
+        "questions": [
+            "Как выстроен план при преддиабете: питание/физическая активность, контроль НbA1c, метформин — и при каких значениях?",
+            "Работает ли в связке с психологом/диетологом при РПП и эмоциональном переедании?",
+            "Какой опыт ведения пациентов с ожирением и инсулинорезистентностью вне беременности?",
+        ],
+        "verdict": "Наиболее устойчивый выбор «по совокупности»: сильная школа НМИЦ + диетология + 10 стабильно высоких отзывов, включая прямой преддиабет. Уступает Ермаковой только по адресности курсов и объёму свежей практики.",
+    },
+    "tarasova_tatyana": {
+        "headline": "Максимум академической школы, но самый противоречивый выбор именно для похудения",
+        "strengths": [
+            "Самая сильная формальная база среди всех 15: РУДН с отличием (2011) → интернатура по терапии → ординатура (2014) и аспирантура (2017) в НМИЦ эндокринологии, к.м.н.",
+            "С 2018 года работает в ФГБУ «НМИЦ Эндокринологии» Минздрава РФ и параллельно в MedSwiss; стаж 15 лет, вторая специальность «диетолог».",
+            "Повышение квалификации по эндокринологии в 2019 и 2024 годах — профиль поддерживается актуальным.",
+            "На ПроДокторов 10 отзывов со средним 4.63: длинные истории про приём по часу, вдумчивый разбор анализов, «смотрит на организм в целом», консультации по питанию, ремиссия тиреотоксикоза, ведение микроаденомы гипофиза и остеопороза.",
+            "Один положительный отзыв Яндекса — прямо «обращалась за консультацией по уменьшению веса. Очень рекомендую».",
+        ],
+        "risks": [
+            "Ключевой риск: Яндекс.Медицина показывает 24 отзыва, из них выгружены первые 5 со средним 2.60. Три из пяти — резко отрицательные (1.0), и два из них предметно про ваш запрос.",
+            "Жалоба от 6 мая (MedSwiss, Гашека 12): «пришла с жалобами на резкую прибавку в весе… поправилась на 11 кг за 9 месяцев», по словам пациентки, обследование не назначили, а направили «к диетологу и в зал».",
+            "Жалоба от 6 августа (КМ-Клиник): «пропустила острое состояние, перепутала диабетические последствия с предынфарктом… мать чуть не впала в кому».",
+            "Третий негативный отзыв — про «лечит только советами» и отказ в анализах. На ПроДокторов тоже есть отзыв 1.80 (2022) про приём при АИТ/планировании беременности без назначений.",
+            "Разрыв между площадками: 4.63 на ПроДокторов против 2.60 на Яндексе. Яндекс неполон (5 из 24), но игнорировать предметный негатив по весу/диабету нельзя.",
+            "Именно из-за двух негативных тематических отзывов применён штраф −1: без него формальная сумма была бы 11/12 (9.2), с ним — 10/12 (8.3).",
+        ],
+        "questions": [
+            "При +11 кг за 9 месяцев какие обследования назначаются обязательно (кортизол, инсулин, НbA1c, ТТГ, липиды, УЗИ)?",
+            "Как разграничиваются «нужна коррекция образа жизни» и «нужна медикаментозная терапия» при ожирении/преддиабете?",
+            "Можно ли посмотреть полные 24 отзыва Яндекса и чем объясняется разница с ПроДокторов?",
+        ],
+        "verdict": "По формальному образованию это врач №1, но для конкретного запроса «предиабет + ожирение» — наиболее спорная кандидатура в топ-3. Оправдана как второе мнение по сложной эндокринопатии; как основной врач для снижения веса требует очной проверки подхода и обсуждения негативных отзывов.",
+    },
+}
+
+
+NEW_DOCTOR_IDS = [
+    "zakharyan_elizaveta", "anohina_liliya", "avramenko_marina",
+]
+
+EXTRA_NOTES = {
+    "zakharyan_elizaveta": {
+        "headline": "Сильная профильная база и редкий курс по инсулинорезистентности, но почти нет отзывов",
+        "strengths": [
+            "Первый МГМУ им. И.М. Сеченова (2018) → ординатура по эндокринологии в МОНИКИ им. Владимирского (2020).",
+            "Четыре курса 2021 года, включая «Роль инсулинорезистентности в развитии сахарного диабета и его осложнений» и «Метаболические нарушения при синдроме поликистозных яичников» — прямое попадание в фокус.",
+            "Специализация на сайте клиники называет СД 1 и 2 типа, ожирение, скрининг поздних осложнений диабета, остеопороз и гиперпролактинемию.",
+            "Стаж 8 лет по сайту клиники, приём в «Поликлиника.ру» на Таганской.",
+        ],
+        "risks": [
+            "Всего 1 отзыв (НаПоправку, 5.0), и он про гипофиз/гормоны, а не про вес или преддиабет — критерий D равен 0.",
+            "Стаж расходится по источникам: 8 лет на сайте клиники, 10 на НаПоправку, 4–6 на агрегаторах.",
+            "Нет к.м.н., аспирантуры, ассоциаций, профиля на ПроДокторов/DocDoc в выгрузке; отзывы не проходят через API репозитория.",
+            "В запросе пользователя опечатка «Елизвета»; корректное написание — Елизавета.",
+        ],
+        "questions": [
+            "Как обследуется инсулинорезистентность и преддиабет (HOMA-IR, HbA1c, глюкозотолерантный тест)?",
+            "Есть ли отдельный протокол ведения пациентов с ожирением и СПКЯ?",
+            "Как организован скрининг поздних осложнений СД?",
+        ],
+        "verdict": "По образованию и курсам заметно сильнее середины рейтинга, но подтвердить практику по предиабету/ожирению нечем: один отзыв не по теме. Хороший кандидат для очной проверки подхода, не для заочного сравнения по отзывам.",
+    },
+    "anohina_liliya": {
+        "headline": "Свежие положительные отзывы, но образование не опубликовано",
+        "strengths": [
+            "Врач-эндокринолог сети «Поликлиника.ру», приём на Таганской / Пролетарской, стаж 5 лет по сайту клиники.",
+            "Три отзыва сентября 2026 года: благодарят за внимание, новый курс лечения и дополнительное обследование, называют «лучшим эндокринологом», отмечают понятные объяснения.",
+            "Упоминается среди врачей, к которым направляют при синдроме Иценко — Кушинга.",
+        ],
+        "risks": [
+            "Образование и повышение квалификации на найденных публичных страницах не опубликованы — это единственный профиль в сравнении с пустым блоком «Где учились».",
+            "Нет профильных курсов по ожирению/преддиабету/СД2, нет ординатуры в профильном центре и академических сигналов.",
+            "Отзывы общего характера, без упоминаний веса или гликемии; числовая оценка на сайте клиники отсутствует (условно 5.0, `rating_assumed`).",
+            "Все отзывы приходят из внешнего слоя, поэтому критерий E ограничен 1 баллом.",
+        ],
+        "questions": [
+            "Где и когда получено базовое образование и ординатура по эндокринологии?",
+            "Есть ли дополнительная подготовка по ожирению, преддиабету или СД 2 типа?",
+            "Какой алгоритм обследования при наборе веса?",
+        ],
+        "verdict": "Самая слабая позиция в сравнении именно из-за отсутствия опубликованного образования: оценка отражает нехватку данных, а не уровень врача. Для осознанного выбора нужны документы об образовании или профиль на площадке с образовательным блоком.",
+    },
+    "avramenko_marina": {
+        "headline": "Хорошая база Сеченовский + МОНИКИ и заявленная работа с СД/ожирением при 8 отзывах",
+        "strengths": [
+            "Первый МГМУ им. И.М. Сеченова (2019) → ординатура по эндокринологии в МОНИКИ им. Владимирского (2021).",
+            "Специализация на сайте клиники прямо включает диагностику и лечение сахарного диабета 1 и 2 типа; на агрегаторе дополнительно указаны метаболический синдром и ожирение.",
+            "8 положительных отзывов на сайте клиники за 2025–2026: «четко, коротко, по делу», «дает четкий план лечения», «направила на анализы, исключающие заболевание», «никаких лишних процедур не назначала».",
+            "Стаж 7 лет, приём в «Поликлиника.ру» на Фрунзенской.",
+        ],
+        "risks": [
+            "Отзывы не имеют числовой оценки и не упоминают вес/преддиабет — D=0, а E ограничен 1 баллом как у внешнего слоя.",
+            "Нет к.м.н., аспирантуры и профильных курсов по ожирению/диабету; вторая специальность «диетолог» не заявлена.",
+            "На ПроДокторов в блоках «Популярные эндокринологи» упоминается 1 отзыв, но отдельная страница врача не найдена — основной слой отзывов пуст.",
+        ],
+        "questions": [
+            "Какой протокол при преддиабете и метаболическом синдроме: какие анализы, когда терапия?",
+            "Есть ли дополнительная подготовка по диетологии/ожирению?",
+            "Можно ли увидеть отзыв на ПроДокторов и результаты лечения в динамике?",
+        ],
+        "verdict": "Крепкий «середина рейтинга»: уровень образования и заявленная специализация по СД2 выделяют её среди новых врачей, но по фокусу «предиабет + ожирение» она уступает лидерам из-за отсутствия адресных курсов и тематических отзывов.",
+    },
+}
+
+DEFAULT_TOP3_NOTES = {
+    "headline": "Врач вошёл в топ-3 по формальной сумме баллов",
+    "strengths": ["См. разбивку критериев A–F и таблицу «Где учились» в основном отчёте."],
+    "risks": ["Отдельный текстовый разбор для этого профиля не подготовлен."],
+    "questions": ["Уточните на приёме перечень обследований при преддиабете и ожирении."],
+    "verdict": "Оценка получена по общей методике без ручного содержательного разбора.",
+}
+
+
+def _institution_is_top(name: str) -> bool:
+    return any(token.lower() in name.lower() for token in TOP_INSTITUTIONS)
+
+
+def _education_kinds(profile: dict) -> list[str]:
+    return [str(item.get("kind", "")).lower() for item in profile.get("education", [])]
+
+
+def score_topic(profile: dict) -> int:
+    text = " ".join(
+        profile.get("courses", [])
+        + profile.get("practice_focus", [])
+        + [str(item.get("program", "")) for item in profile.get("education", [])]
+        + [profile.get("specialty", "")]
+    )
+    specialty = profile.get("specialty", "").lower()
+    if "гинеколог" in specialty and not STRONG_FOCUS.search(text):
+        return 0
+    if STRONG_FOCUS.search(text):
+        return 2
+    if GENERAL_FOCUS.search(text):
+        return 1
+    return 0
+
+
+def score_training(profile: dict) -> int:
+    kinds = _education_kinds(profile)
+    has_ordinatura = any("ординатура" in kind for kind in kinds)
+    has_aspirantura = any("аспирантура" in kind for kind in kinds)
+    if has_ordinatura and (has_aspirantura or profile.get("degree")):
+        return 2
+    if has_ordinatura:
+        return 1
+    return 0
+
+
+def score_university(profile: dict) -> int:
+    education = profile.get("education", [])
+    base = str(education[0].get("institution", "")) if education else ""
+    kinds = _education_kinds(profile)
+    has_aspirantura = any("аспирантура" in kind for kind in kinds)
+    has_ordinatura = any("ординатура" in kind for kind in kinds)
+    advanced_center = any(
+        _institution_is_top(str(item.get("institution", "")))
+        and ("переподготов" in kind or "повышение" in kind)
+        for item, kind in zip(education, kinds)
+    )
+    signals = sum([
+        bool(profile.get("honors")),
+        bool(profile.get("degree")),
+        has_aspirantura,
+        bool(profile.get("documents_verified")),
+        bool(profile.get("associations")),
+        len(profile.get("courses", [])) >= 5,
+        has_ordinatura,
+        advanced_center,
+    ])
+    result = 0
+    if signals >= 2 or (_institution_is_top(base) and has_aspirantura):
+        result = 2
+    elif signals >= 1 or _institution_is_top(base):
+        result = 1
+    specialty = profile.get("specialty", "").lower()
+    if "гинеколог" in specialty and "эндокринолог" not in specialty:
+        result = min(result, 1)
+    return result
+
+
+def score_experience(profile: dict) -> int:
+    years = int(profile.get("experience_years", 0))
+    updated_year = int(str(profile.get("page_updated", "0000"))[:4] or 0)
+    if years >= 15 and updated_year >= 2025:
+        return 2
+    if years >= 5:
+        return 1
+    return 0
+
+
+def load_review_layers(output_dir: Path) -> dict[str, list[dict]]:
+    """Возвращает все отзывы в разрезе doctor_id с пометкой пригодности."""
+    by_doctor: dict[str, list[dict]] = {}
+
+    def add(doctor_id: str, message: str, rating_5: float, layer: str, usable: bool, date: str = "") -> None:
+        by_doctor.setdefault(doctor_id, []).append(
+            {"message": message, "rating_5": rating_5, "layer": layer, "usable": usable, "date": date}
+        )
+
+    main_path = output_dir / "reviews.json"
+    if main_path.exists():
+        for record in json.loads(main_path.read_text(encoding="utf-8")):
+            for review in record.get("reviews", []):
+                add(
+                    record["doctor_id"], review.get("message", ""),
+                    float(review.get("rating", 0)) / 20, "main", True,
+                    review.get("date", ""),
+                )
+    doctu_path = output_dir / "doctu_reviews.json"
+    if doctu_path.exists():
+        for profile in json.loads(doctu_path.read_text(encoding="utf-8")).get("profiles", []):
+            for review in profile.get("reviews", []):
+                usable = review.get("source_kind") == "doctu_doctor"
+                add(
+                    profile["doctor_id"], review.get("message", ""),
+                    float(review.get("rating_5", 0)), "doctu", usable,
+                    review.get("date", ""),
+                )
+    yandex_path = output_dir / "yandex_reviews.json"
+    if yandex_path.exists():
+        for profile in json.loads(yandex_path.read_text(encoding="utf-8")).get("profiles", []):
+            for review in profile.get("reviews", []):
+                usable = review.get("source_kind") != "yandex_clinic"
+                add(
+                    profile["doctor_id"], review.get("message", ""),
+                    float(review.get("rating_5", 0)), "yandex", usable,
+                    review.get("date_beauty", ""),
+                )
+    extra_path = output_dir / "extra_doctor_reviews.json"
+    if extra_path.exists():
+        for profile in json.loads(extra_path.read_text(encoding="utf-8")).get("profiles", []):
+            for review in profile.get("reviews", []):
+                add(
+                    profile["doctor_id"], review.get("message", ""),
+                    float(review.get("rating_5", 0)), "extra", True,
+                    review.get("date", ""),
+                )
+    return by_doctor
+
+
+def score_review_layers(reviews: list[dict]) -> tuple[int, float, int, int, int, int]:
+    """Возвращает (балл E, средний, всего, основных, внешних, тематических)."""
+    usable = [item for item in reviews if item["usable"]]
+    main_count = sum(1 for item in usable if item["layer"] == "main")
+    external_count = len(usable) - main_count
+    values = [item["rating_5"] for item in usable]
+    average = round(sum(values) / len(values), 2) if values else 0.0
+    topic_hits = sum(1 for item in usable if REVIEW_FOCUS.search(item["message"]))
+    if len(values) >= 3 and average >= 4.5:
+        base = 2
+    elif len(values) >= 3 and average >= 3.5:
+        base = 1
+    else:
+        base = 0
+    if main_count == 0 and external_count > 0:
+        base = min(base, 1)
+    return base, average, len(values), main_count, external_count, topic_hits
+
+
+def score_topic_reviews(reviews: list[dict]) -> int:
+    """Тема в ПОЛОЖИТЕЛЬНЫХ отзывах: негативные упоминания балл не повышают."""
+    hits = sum(
+        1 for item in reviews
+        if item["usable"] and item["rating_5"] >= 4 and REVIEW_FOCUS.search(item["message"])
+    )
+    return 2 if hits >= 2 else 1 if hits == 1 else 0
+
+
+def count_topic_reviews(reviews: list[dict]) -> tuple[int, int]:
+    usable = [item for item in reviews if item["usable"] and REVIEW_FOCUS.search(item["message"])]
+    positive = sum(1 for item in usable if item["rating_5"] >= 4)
+    negative = sum(1 for item in usable if item["rating_5"] < 3)
+    return positive, negative
+
+
+def summarize_education(profile: dict) -> tuple[str, str, str]:
+    education = profile.get("education", [])
+    base = str(education[0].get("institution", "")) if education else "—"
+    postgraduate = [
+        f"{item.get('institution', '')} ({item.get('year', '')}, {item.get('kind', '')})"
+        for item in education[1:]
+        if any(word in str(item.get("kind", "")).lower() for word in ("ординатура", "аспирантура", "интернатура"))
+    ]
+    focus = [
+        item for item in profile.get("courses", []) + profile.get("practice_focus", [])
+        if STRONG_FOCUS.search(str(item))
+    ]
+    return base, "; ".join(postgraduate) or "—", "; ".join(focus[:2]) or "—"
+
+
+def rate(profile: dict, reviews: list[dict]) -> dict[str, Any]:
+    components = {
+        "A": score_topic(profile),
+        "B": score_training(profile),
+        "C": score_university(profile),
+        "D": score_topic_reviews(reviews),
+        "E": 0,
+        "F": score_experience(profile),
+    }
+    e_score, average, total, main_count, external_count, topic_hits = score_review_layers(reviews)
+    components["E"] = e_score
+    positive_topic, negative_topic = count_topic_reviews(reviews)
+    penalty = 1 if negative_topic >= 2 else 0
+    raw = sum(components.values())
+    adjusted = max(raw - penalty, 0)
+    base, residency, focus_courses = summarize_education(profile)
+    return {
+        "doctor_id": profile["doctor_id"],
+        "doctor": profile["name"],
+        "specialty": profile.get("specialty", ""),
+        "score_10": round(adjusted / 12 * 10, 1),
+        "raw_score": raw,
+        "penalty": penalty,
+        "adjusted_raw": adjusted,
+        "components": components,
+        "avg_rating_5": average,
+        "review_count": total,
+        "main_reviews": main_count,
+        "external_reviews": external_count,
+        "topic_review_hits": topic_hits,
+        "positive_topic_reviews": positive_topic,
+        "negative_topic_reviews": negative_topic,
+        "base_university": base,
+        "residency": residency,
+        "focus_courses": focus_courses,
+        "experience_years": profile.get("experience_years", 0),
+        "page_updated": profile.get("page_updated", ""),
+        "rationale": profile.get("notes", ""),
+        "source_urls": profile.get("source_urls", []),
+    }
+
+
+def build_ratings(profiles: dict, reviews_dir: Path) -> tuple[list[dict], dict[str, list[dict]]]:
+    by_doctor = load_review_layers(reviews_dir)
+    ratings = [rate(profile, by_doctor.get(profile["doctor_id"], [])) for profile in profiles["profiles"]]
+    ratings.sort(key=lambda row: (-row["score_10"], -row["avg_rating_5"], -row["experience_years"], row["doctor_id"]))
+    for index, row in enumerate(ratings, 1):
+        row["rank"] = index
+        row["cohort"] = "added" if row["doctor_id"] in NEW_DOCTOR_IDS else "original"
+    return ratings, by_doctor
+
+
+def render_markdown(profiles: dict, ratings: list[dict]) -> str:
+    lines = [
+        "# Оценка врачей по 10-балльной шкале: предиабет и ожирение",
+        "",
+        "> **Не медицинская рекомендация.** Это индекс соответствия *открытых публичных данных* ",
+        "> заданной теме, а не оценка клинической квалификации. Нет данных в открытых источниках — ",
+        "> не значит, что врач не работает с предиабетом. Решение о выборе врача принимается на приёме.",
+        "",
+        f"Фокус: **{profiles.get('focus', '')}**. Врачей в оценке: **{len(ratings)}** "
+        f"(из них **{len(NEW_DOCTOR_IDS)}** добавлены в сравнение отдельным слоем).",
+        "",
+        "## Методика",
+        "",
+        "Шесть критериев, каждый 0–2 балла; сумма 0–12 нормируется в 0–10 (`балл = сумма / 12 × 10`).",
+        "За ≥2 негативных отзыва именно по теме вычитается 1 штрафной балл до нормирования.",
+        "",
+        "| Код | Критерий | Что даёт 2 балла |",
+        "| --- | --- | --- |",
+        "| A | Профильное обучение | Курс/программа прямо по ожирению, преддиабету, СД2, диетологии, метаболизму |",
+        "| B | Ординатура/аспирантура | Ординатура + аспирантура или учёная степень |",
+        "| C | Где учились | Профильный вуз/центр плюс ≥2 академических сигнала (отличие, к.м.н., ассоциации, проверенные документы, курсы) |",
+        "| D | Тема в положительных отзывах | Тема звучит минимум в 2 отзывах с оценкой ≥4 |",
+        "| E | Отзывы | Средний ≥4.5 и ≥3 отзывов по всем слоям |",
+        "| F | Стаж/актуальность | Стаж ≥15 лет и страница обновлена в 2025–2026 |",
+        "",
+        "Источники отзывов: основной слой `reviews.json`, отзывы о враче с ДОКТУ и Яндекс.Медицины ",
+        "(отзывы о клиниках исключены), а также `extra_doctor_reviews.json` для трёх новых врачей. ",
+        "На сайте клиники числовая оценка не публикуется: положительным текстам условно присвоено 5.0 ",
+        "с пометкой `rating_assumed=true`, поэтому их средний балл условный. ",
+        "Если отзывы есть только во внешних слоях, критерий E ограничен 1 баллом. ",
+        "**Негативные отзывы по теме (оценка <3) не повышают D**; при двух и более из суммы вычитается 1 балл. ",
+        "В текущих данных штраф применён только к Тарасовой: два отзыва Яндекса с оценкой 1.0 предметно ",
+        "жалуются на прибавку веса и диабетические осложнения. Яндекс отдаёт лишь первые 5 отзывов, ",
+        "поэтому его средний балл может смещать оценку — конфликтующие сигналы перечислены в обоснованиях.",
+        "",
+        "### Как читать результат",
+        "",
+        "Топ-3 после учёта знака отзывов: **Ермакова → Джатиева → Тарасова**. ",
+        "У Ермаковой самое адресное обучение («Ожирение. Преддиабет») и идеальные, но короткие отзывы; ",
+        "у Джатиевой лучший баланс школы НМИЦ, диетологии и 10 стабильных отзывов с прямым преддиабетом. ",
+        "Тарасова обладает сильнейшей формальной базой (ординатура + аспирантура в НМИЦ, к.м.н., 15 лет), ",
+        "но для целевого запроса это самый спорный выбор из-за предметного негатива Яндекса. ",
+        "Подробный разбор с цитатами, таймлайном образования и вопросами к врачу — в `output/top3_detail.md`.",
+        "",
+        "## Рейтинг",
+        "",
+        "| № | Врач | Балл /10 | A | B | C | D | E | F | Штраф | Ср. балл | Отзывов |",
+        "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for row in ratings:
+        c = row["components"]
+        lines.append(
+            f"| {row['rank']} | {row['doctor']} | **{row['score_10']:.1f}** | "
+            f"{c['A']} | {c['B']} | {c['C']} | {c['D']} | {c['E']} | {c['F']} | "
+            f"−{row['penalty']} | {row['avg_rating_5']:.2f} | {row['review_count']} |"
+        )
+    lines += ["", "## Где учились", "", "| Врач | Базовый вуз | Ординатура / аспирантура | Профильные курсы / практика |", "| --- | --- | --- | --- |"]
+    for row in ratings:
+        lines.append(
+            f"| {row['doctor']} | {row['base_university']} | {row['residency']} | {row['focus_courses']} |"
+        )
+    lines += [
+        "", "## Новые участники сравнения", "",
+        "| Врач | Балл /10 | Где учились | Профиль по теме | Отзывов |",
+        "| --- | ---: | --- | --- | ---: |",
+    ]
+    rating_by_id = {row["doctor_id"]: row for row in ratings}
+    for key in NEW_DOCTOR_IDS:
+        row = rating_by_id[key]
+        lines.append(
+            f"| {row['doctor']} | **{row['score_10']:.1f}** | {row['base_university']} "
+            f"| {row['focus_courses']} | {row['review_count']} |"
+        )
+    lines += [
+        "", "Подробный разбор с образованием, отзывами и вопросами к врачу — `output/comparison_extra.md`.", "",
+        "## Обоснования и оговорки", "",
+    ]
+    for row in ratings:
+        c = row["components"]
+        lines.append(
+            f"**{row['rank']}. {row['doctor']} — {row['score_10']:.1f}/10** "
+            f"(A{c['A']} B{c['B']} C{c['C']} D{c['D']} E{c['E']} F{c['F']}, штраф −{row['penalty']}, "
+            f"стаж {row['experience_years']} лет, стр. обновлена {row['page_updated']}). "
+            f"{row['rationale']}"
+        )
+        lines.append("")
+    lines += [
+        "## Что оценка не учитывает",
+        "",
+        "- Реальные клинические исходы, % пациентов, достигших снижения веса или нормализации гликемии;",
+        "- лицензии, сертификаты и аккредитации, не опубликованные на страницах врачей;",
+        "- стоимость приёма, доступность записи и личные предпочтения пациента;",
+        "- полноту отзывов Яндекс.Медицины (только первые 5) и возможную предвзятость отзывов.",
+        "",
+        "Файлы: `output/doctor_profiles.json`, `output/doctor_ratings.json`, `output/doctor_ratings.csv`, ",
+        "`output/extra_doctor_reviews.json`, `output/top3_detail.md` (лидеры), `output/comparison_extra.md` (новые врачи).",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _plural_reviews(count: int) -> str:
+    if count % 10 == 1 and count % 100 != 11:
+        return "отзыв"
+    if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
+        return "отзыва"
+    return "отзывов"
+
+
+def _quote(message: str, limit: int = 320) -> str:
+    clean = " ".join(message.split())
+    return clean if len(clean) <= limit else clean[:limit].rstrip() + "…"
+
+
+def render_detail(
+    profiles: dict,
+    ratings: list[dict],
+    by_doctor: dict[str, list[dict]],
+    doctor_ids: list[str],
+    notes_map: dict,
+    *,
+    title: str,
+    intro: str,
+    closing: list[str],
+) -> str:
+    pmap = {item["doctor_id"]: item for item in profiles["profiles"]}
+    by_id = {row["doctor_id"]: row for row in ratings}
+    top = [by_id[key] for key in doctor_ids if key in by_id]
+    lines = [
+        f"# {title}",
+        "",
+        "> **Не медицинская рекомендация.** Ниже — разбор открытых публичных данных и отзывов, ",
+        "> а не оценка клинической компетентности. Отзывы субъективны: часть площадок отдаёт ",
+        "> только первые 5 отзывов или не публикует числовую оценку, а отсутствие упоминаний темы ",
+        "> не означает, что врач с ней не работает.",
+        "",
+        intro,
+        "",
+        "---",
+        "",
+    ]
+    for index, row in enumerate(top, 1):
+        doctor_id = row["doctor_id"]
+        profile = pmap[doctor_id]
+        notes = notes_map.get(doctor_id, DEFAULT_TOP3_NOTES)
+        c = row["components"]
+        lines += [
+            f"## {index}. {row['doctor']} — {row['score_10']:.1f}/10",
+            "",
+            f"*{notes['headline']}*",
+            "",
+            f"Специальность: **{row['specialty']}** · стаж **{row['experience_years']} лет** · "
+            f"страница обновлена **{row['page_updated']}** · средний балл отзывов **{row['avg_rating_5']:.2f}** "
+            f"из **{row['review_count']}** {_plural_reviews(row['review_count'])} "
+            f"(основной слой {row['main_reviews']}, внешние {row['external_reviews']}).",
+            "",
+            f"Разбивка: A={c['A']} (курсы), B={c['B']} (ординатура), C={c['C']} (вуз), "
+            f"D={c['D']} (тема в положительных отзывах), E={c['E']} (отзывы), F={c['F']} (стаж). "
+            f"Сумма {row['raw_score']}/12, штраф −{row['penalty']}, итог {row['adjusted_raw']}/12 → "
+            f"**{row['score_10']:.1f}/10**.",
+            "",
+            "### Где учились",
+            "",
+        ]
+        for item in profile["education"]:
+            lines.append(f"- **{item['year']}** — {item['institution']}: {item['program']} ({item['kind']}).")
+        if profile.get("degree"):
+            lines.append(f"- Учёная степень: **{profile['degree']}**.")
+        if profile.get("honors"):
+            lines.append("- Базовое образование — **с отличием**.")
+        if profile.get("documents_verified"):
+            lines.append("- Документы об образовании **проверены ПроДокторов**.")
+        if profile.get("associations"):
+            lines.append(f"- Ассоциации: {', '.join(profile['associations'])}.")
+        lines += ["", "### Профильное обучение и практика по теме", ""]
+        for course in profile.get("courses", []):
+            lines.append(f"- {course}")
+        for focus in profile.get("practice_focus", []):
+            lines.append(f"- Практика/профиль: {focus}")
+        if not profile.get("courses") and not profile.get("practice_focus"):
+            lines.append("- Отдельных тематических курсов на странице не указано.")
+        lines += ["", "### Что говорят отзывы по теме", ""]
+        reviews = [item for item in by_doctor.get(doctor_id, []) if item["usable"]]
+        positives = [item for item in reviews if REVIEW_FOCUS.search(item["message"]) and item["rating_5"] >= 4]
+        negatives = [item for item in reviews if REVIEW_FOCUS.search(item["message"]) and item["rating_5"] < 3]
+        if positives:
+            for item in positives[:4]:
+                lines.append(
+                    f"- ✅ **{item['rating_5']:.1f}** ({item['layer']}, {item.get('date', 'без даты')}): "
+                    f"«{_quote(item['message'])}»"
+                )
+        else:
+            lines.append("- Положительных отзывов с прямым упоминанием темы в выгрузке нет.")
+        if negatives:
+            for item in negatives[:4]:
+                lines.append(
+                    f"- ⚠️ **{item['rating_5']:.1f}** ({item['layer']}, {item.get('date', 'без даты')}): "
+                    f"«{_quote(item['message'])}»"
+                )
+        else:
+            lines.append("- Негативных отзывов именно по теме в выгрузке нет.")
+        lines += ["", "### Сильные стороны", ""]
+        lines += [f"- {item}" for item in notes["strengths"]]
+        lines += ["", "### Риски и оговорки", ""]
+        lines += [f"- {item}" for item in notes["risks"]]
+        lines += ["", "### Что уточнить на приёме", ""]
+        lines += [f"- {item}" for item in notes["questions"]]
+        lines += ["", "### Итог", "", notes["verdict"], "", "Источники:"]
+        lines += [f"- {url}" for url in profile.get("source_urls", [])]
+        lines += ["", "---", ""]
+    lines += closing + [""]
+    return "\n".join(lines)
+
+
+def write_csv(ratings: list[dict], path: Path) -> None:
+    with path.open("w", encoding="utf-8-sig", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=CSV_FIELDS, extrasaction="ignore")
+        writer.writeheader()
+        for row in ratings:
+            flat = {**row, **{key: row["components"][key] for key in CRITERIA}}
+            writer.writerow(flat)
+
+
+def append_summary(summary_path: Path, section: str) -> None:
+    _append_summary(summary_path, section, start=START, end=END)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profiles", default="output/doctor_profiles.json")
+    parser.add_argument("--output-dir", default="output")
+    parser.add_argument("--reviews-dir", default=None,
+                        help="Где лежат reviews.json/doctu_reviews.json/yandex_reviews.json "
+                             "(по умолчанию --output-dir)")
+    parser.add_argument("--append-summary", action="store_true")
+    args = parser.parse_args(argv)
+
+    profiles = json.loads(Path(args.profiles).read_text(encoding="utf-8"))
+    out = Path(args.output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    reviews_dir = Path(args.reviews_dir) if args.reviews_dir else out
+    ratings, by_doctor = build_ratings(profiles, reviews_dir)
+    (out / "doctor_ratings.json").write_text(
+        json.dumps({"focus": profiles.get("focus"), "criteria": CRITERIA, "ratings": ratings}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    write_csv(ratings, out / "doctor_ratings.csv")
+    section = render_markdown(profiles, ratings)
+    (out / "doctor_ratings.md").write_text(section, encoding="utf-8")
+    (out / "top3_detail.md").write_text(
+        render_detail(
+            profiles, ratings, by_doctor,
+            [row["doctor_id"] for row in ratings[:3]], TOP3_NOTES,
+            title="Топ-3: подробный разбор (предиабет, ожирение)",
+            intro="Порядок после исправления методики (учтён знак тематических отзывов): **"
+                  + " → ".join(row["doctor"].split()[0] for row in ratings[:3]) + "**.",
+            closing=[
+                "Связанные файлы: `output/doctor_ratings.md`, `output/doctor_ratings.csv`, ",
+                "`output/doctor_profiles.json`, `output/reviews.json`, `output/yandex_reviews.json`.",
+            ],
+        ),
+        encoding="utf-8",
+    )
+    (out / "comparison_extra.md").write_text(
+        render_detail(
+            profiles, ratings, by_doctor, NEW_DOCTOR_IDS, EXTRA_NOTES,
+            title="Три новых врача в сравнении (предиабет, ожирение)",
+            intro="Добавлены по просьбе пользователя. Их страницы и отзывы находятся на `polyclinika.ru` "
+                  "и НаПоправку — домены не входят в `SOURCE_CONFIGS`, поэтому данные лежат в отдельном слое "
+                  "`output/extra_doctor_reviews.json`, а не в `output/reviews.json`.",
+            closing=[
+                "Связанные файлы: `output/extra_doctor_reviews.json`, `output/doctor_ratings.md`, ",
+                "`output/doctor_profiles.json`, `output/top3_detail.md`.",
+            ],
+        ),
+        encoding="utf-8",
+    )
+    if args.append_summary:
+        append_summary(out / "summary.md", section)
+    print(
+        f"Оценено врачей: {len(ratings)} (новых: {len(NEW_DOCTOR_IDS)}); топ-3: "
+        f"{', '.join(row['doctor'].split()[0] for row in ratings[:3])} → {out}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
